@@ -77,7 +77,11 @@ def require_admin():
 @app.route("/")
 def home():
     """主頁 - 直接顯示查詢頁面"""
-    return render_template("query.html")
+    response = make_response(render_template("query.html"))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
