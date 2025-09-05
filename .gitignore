@@ -1,0 +1,72 @@
+# Python 相關
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 資料庫文件
+*.db
+*.db-journal
+*.backup
+*.backup_*
+
+# 日誌文件
+*.log
+*.out
+
+# 臨時文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE 相關
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 環境變數
+.env
+.env.local
+.env.production
+
+# Firebase 相關
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# 下載的 PDF 文件（太大）
+downloads/
+
+# Node.js (如果有的話)
+node_modules/
+package-lock.json
+
+# 測試覆蓋率
+.coverage
+htmlcov/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg

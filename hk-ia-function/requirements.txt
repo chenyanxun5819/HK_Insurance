@@ -1,0 +1,9 @@
+flask
+gunicorn
+google-cloud-storage
+requests
+pdfplumber
+beautifulsoup4
+lxml
+sendgrid
+google-cloud-firestore==2.13.1

@@ -1,0 +1,52 @@
+### Firestore 登入問題解析
+
+根據您提供的 Python Flask 程式碼和 HTML 模板，您遇到登入後持續跳轉回登入頁面的問題，很可能與 **Session 和 Cookie 的處理方式**有關。
+
+從您的 `main.py` 檔案中，我發現以下幾點可能會導致這個問題：
+
+1.  **認證檢查 (Authentication Check)**：
+    * `@app.route("/")` 中的 `home()` 函式呼叫了 `require_auth()` 來檢查用戶是否已經登入。
+    * `require_auth()` 函式則嘗試從請求的 **Header** 或 **Cookie** 中獲取 `session_token`。
+    * 如果 `session_token` 不存在或驗證失敗，`require_auth()` 會回傳一個 `{'valid': False, ...}` 的字典，然後 `home()` 函式會將用戶重定向回 `/login` 頁面。
+
+2.  **Cookie 設定問題**：
+    * 在 `login()` 函式中，您成功登入後，使用了 `response.set_cookie(...)` 來設定 `session_token`。
+    * 這裡有幾個關鍵參數：
+        * `httponly=True`：這個設定是正確的，可以防止 JavaScript 直接存取 Cookie，增加安全性。
+        * `secure=is_secure`：這個參數取決於您的應用程式是否在 HTTPS 環境下執行。您的連結 `https://hk-insurance-aml...` 已經是 HTTPS，所以 `request.is_secure` 應該會是 `True`。但若有代理伺服器（proxy）介入，例如 Google Cloud Run，您額外使用的 `request.headers.get('X-Forwarded-Proto') == 'https'` 則是正確的判斷方式。
+        * `samesite='Lax'`：這是一個重要的設定，它限制了 Cookie 在跨站點請求時的發送行為。在大多數情況下，這不會造成問題。
+        * `path='/'`：這表示 Cookie 在整個網域下都有效。
+
+3.  **瀏覽器與跨域問題**：
+    * 雖然您的程式碼看起來沒什麼問題，但如果您是在本機開發環境下運行，但試圖從一個不同的網域（例如使用 `localhost:8080` 訪問，但服務器在 `0.0.0.0:8080`）訪問，或者瀏覽器設定有問題，就可能導致 `session_token` 這個 Cookie 無法被正確地設定或在後續請求中被發送。
+
+---
+
+### 可能的解決方案
+
+要解決這個問題，您可以嘗試以下幾個步驟來診斷和修復：
+
+1.  **確認 Cookie 是否已成功設定和發送**
+    * 使用瀏覽器的開發者工具（通常是按 `F12`），在 **Network** (網路) 標籤下，檢查 `/login` 請求的回應。
+    * 查看回應標頭中是否有 `Set-Cookie: session_token=...`。
+    * 接著，檢查對 `/` 頁面發出的請求。查看請求標頭中是否包含 `Cookie: session_token=...`。
+    * 如果第一個請求成功設定了 Cookie，但後續請求沒有帶上，那問題可能出在瀏覽器或 Cookie 的設定上。
+
+2.  **檢查 `secure` 參數**
+    * 雖然您的程式碼已經包含了 `request.is_secure` 和 `request.headers.get('X-Forwarded-Proto')` 的判斷，但如果您的部署環境有特殊的代理設定，這個判斷可能會出錯。
+    * 您可以暫時將 `secure=is_secure` 改為 `secure=True` 進行測試，以確保在 HTTPS 環境下 Cookie 能夠被正確設定。
+    * **注意：** 這僅用於測試，在非 HTTPS 環境下會導致 Cookie 無法設定。
+
+3.  **檢查 `session` 物件**
+    * 您在 `main.py` 中使用了 `session` 物件，但又自己手動處理了 `session_token` 的發送和驗證。這兩種機制是獨立的。
+    * `Flask` 自帶的 `session` 物件是基於伺服器端簽名的，它會將所有 session 資料加密後存儲在一個名為 `session` 的 Cookie 中。
+    * 您的程式碼使用了自定義的 `session_token`，並透過 Firestore 進行驗證。這是一個合理的做法，但您需要確保流程中的每一步都正確無誤。
+    * **如果您只是想簡單地解決問題，可以考慮直接使用 Flask 內建的 `session` 物件來管理登入狀態，而不是手動處理 `session_token`。**
+
+### 結論
+
+根據您的描述，最大的可能性是 **`session_token` 這個 Cookie 沒有在後續請求中被正確地傳送給伺服器**。這通常是因為 Cookie 的 `domain`、`path` 或 `secure` 屬性與瀏覽器所訪問的 URL 不匹配。
+
+由於您是在 Google Cloud Run 上運行，`https://hk-insurance-aml...` 是一個完全合格的 HTTPS URL，因此問題最可能出在程式碼中設定 `secure` 參數的邏輯，或者瀏覽器端在接收和發送 Cookie 時的某些行為。
+
+建議您先從開發者工具入手，一步一步檢查 Cookie 的生命週期，這將是診斷問題最有效的方法。

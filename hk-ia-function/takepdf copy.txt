@@ -1,0 +1,145 @@
+from google.cloud import storage
+import os, tempfile, sqlite3, requests, pdfplumber, random, string
+from datetime import datetime
+
+IA_BASE_URL = "https://www.ia.org.hk/en/legislative_framework/circulars/antimoney_laundering/files/"
+
+# ---------- DB 基礎 ----------
+
+def _connect(db_path):
+    return sqlite3.connect(db_path)
+
+def ensure_db_exists(local_path):
+    """若 DB 不存在，建立空 DB 與基本表結構。若存在，確保 schema 完整。"""
+    first_time = not os.path.exists(local_path)
+    conn = _connect(local_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            year INTEGER,
+            name TEXT,
+            nationality TEXT,
+            passport_no TEXT,
+            source_pdf TEXT,
+            created_at TEXT
+        )
+    """)
+    # schema 升級：確保所有欄位存在（防止舊 DB 缺欄位）
+    _ensure_column(conn, "profiles", "nationality", "TEXT")
+    _ensure_column(conn, "profiles", "passport_no", "TEXT")
+    _ensure_column(conn, "profiles", "created_at", "TEXT")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS processed_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_pdf TEXT UNIQUE
+        )
+    """)
+    conn.commit()
+    conn.close()
+    if first_time:
+        print("✅ 建立新 DB 與表結構完成")
+
+def _ensure_column(conn, table, column, type_sql):
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in cur.fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {type_sql}")
+
+def download_db(bucket_name, db_file):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(db_file)
+    local_path = os.path.join(tempfile.gettempdir(), db_file)
+    try:
+        blob.download_to_filename(local_path)
+        print(f"✅ 已下載 DB: {local_path}")
+    except Exception as e:
+        print(f"⚠️ 下載 DB 失敗（可能不存在）: {e}")
+        ensure_db_exists(local_path)
+    else:
+        # 即使有檔，也確保 schema 完整
+        ensure_db_exists(local_path)
+    return local_path
+
+def upload_db(bucket_name, db_file, local_path):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(db_file)
+    blob.upload_from_filename(local_path)
+    print(f"✅ 已上傳 DB 到 {bucket_name}/{db_file}")
+
+# ---------- 更新流程（骨架：空 DB 全量，非空抓最新年度）----------
+
+def get_existing_years(db_path):
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT year FROM profiles WHERE year IS NOT NULL ORDER BY year")
+    years = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return years
+
+def fetch_pdfs_for_year(year):
+    # TODO: 這裡換成真實爬蟲邏輯
+    # 範例回傳一筆測試 PDF URL
+    return [f"{IA_BASE_URL}AML_{year}_example.pdf"]
+
+def process_pdfs(pdf_urls, db_path, year):
+    conn = _connect(db_path)
+    for url in pdf_urls:
+        try:
+            r = requests.get(url, timeout=30)
+        except Exception as e:
+            print(f"❌ 連線錯誤: {url} -> {e}")
+            continue
+        if r.status_code == 200:
+            pdf_path = os.path.join(tempfile.gettempdir(), os.path.basename(url))
+            with open(pdf_path, "wb") as f:
+                f.write(r.content)
+            try:
+                with pdfplumber.open(pdf_path) as pdf:
+                    text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+                # 寫入一筆簡化資料（真實邏輯請替換）
+                conn.execute("""
+                    INSERT INTO profiles (year, name, nationality, passport_no, source_pdf, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (year, f"Sample Name {year}", "china", _rand_passport(), url, _now()))
+                conn.commit()
+                print(f"📄 解析完成並寫入 DB: {url}")
+            except Exception as e:
+                print(f"❌ PDF 解析/寫入錯誤: {e}")
+        else:
+            print(f"❌ 無法下載 {url}, status={r.status_code}")
+    conn.close()
+
+def run_crawler(bucket_name, db_file):
+    db_path = download_db(bucket_name, db_file)
+    years = get_existing_years(db_path)
+    if not years:
+        years_to_fetch = list(range(2015, 2026))  # TODO: 依實際最舊年度調整
+        print(f"📅 空 DB → 全量抓取: {years_to_fetch}")
+    else:
+        years_to_fetch = [max(years) + 1]
+        print(f"📅 DB 已有 {years} → 抓取最新年度: {years_to_fetch}")
+    for y in years_to_fetch:
+        pdf_urls = fetch_pdfs_for_year(y)
+        process_pdfs(pdf_urls, db_path, y)
+    upload_db(bucket_name, db_file, db_path)
+
+# ---------- 查詢與測試資料 ----------
+
+def query_name(bucket_name, db_file, name):
+    db_path = download_db(bucket_name, db_file)
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT name, nationality, passport_no
+        FROM profiles
+        WHERE name LIKE ? COLLATE NOCASE
+    """, (f"%{name}%",))
+    rows = cursor.fetchall()
+    conn.close()
+    # 格式化成 "姓名 | 國籍 | 護照號碼"
+    formatted = [f"{r[0]} | {r[1]} | {r[2]}" for r in rows]
+    return (len(formatted) > 0, formatted)
+
+
