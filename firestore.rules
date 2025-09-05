@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 用戶文檔 - 只有用戶自己可以讀寫
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 會話文檔 - 只有認證用戶可以讀寫自己的會話
+    match /sessions/{sessionId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 查詢日誌 - 只有認證用戶可以讀寫
+    match /query_logs/{logId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 管理員功能 - 只有管理員可以存取
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_admin == true;
+    }
+  }
+}

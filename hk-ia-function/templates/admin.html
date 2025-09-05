@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理員面板 - HK Insurance AML 系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .nav-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .users-table th,
+        .users-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .users-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-warning {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
+        .membership-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .membership-basic {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .membership-premium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .membership-super {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <button class="logout-btn" onclick="logout()">登出</button>
+
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ 管理員面板</h1>
+            <p>用戶管理與系統設定</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('users')">用戶管理</button>
+            <button class="nav-tab" onclick="showTab('stats')">系統統計</button>
+        </div>
+
+        <!-- 用戶管理標籤 -->
+        <div id="users-tab" class="tab-content active">
+            <h2>用戶管理</h2>
+            <div id="users-loading" class="loading">載入中...</div>
+            <div id="users-content" style="display: none;">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Email</th>
+                            <th>會員等級</th>
+                            <th>狀態</th>
+                            <th>註冊時間</th>
+                            <th>最後登入</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 系統統計標籤 -->
+        <div id="stats-tab" class="tab-content">
+            <h2>系統統計</h2>
+            <div id="stats-content">
+                <p>統計功能開發中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改會員等級模態框 -->
+    <div id="membershipModal" class="modal">
+        <div class="modal-content">
+            <h3>修改會員等級</h3>
+            <div class="form-group">
+                <label for="membershipSelect">選擇會員等級：</label>
+                <select id="membershipSelect">
+                    <option value="basic">初級會員 (5次/日)</option>
+                    <option value="premium">付費會員 (100次/日)</option>
+                    <option value="super">超級會員 (無限制)</option>
+                </select>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="updateMembership()">確定</button>
+                <button class="btn" onclick="closeModal('membershipModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置密碼模態框 -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h3>重置用戶密碼</h3>
+            <div class="form-group">
+                <label for="newPassword">新密碼：</label>
+                <input type="password" id="newPassword" placeholder="至少6位字符">
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="resetPassword()">確定重置</button>
+                <button class="btn" onclick="closeModal('passwordModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = null;
+        let currentUser = null;
+
+        // 檢查登入狀態
+        function checkAuth() {
+            const sessionToken = getCookie('session_token');
+            if (!sessionToken) {
+                window.location.href = '/login';
+                return;
+            }
+
+            fetch('/profile', {
+                headers: {
+                    'Authorization': sessionToken
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.valid || !data.user.is_admin) {
+                        alert('需要管理員權限');
+                        window.location.href = '/';
+                        return;
+                    }
+                    currentUser = data.user;
+                    loadUsers();
+                })
+                .catch(error => {
+                    console.error('認證失敗:', error);
+                    window.location.href = '/login';
+                });
+        }
+
+        // 獲取Cookie
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // 登出
+        function logout() {
+            if (confirm('確定要登出嗎？')) {
+                fetch('/logout', { method: 'POST' })
+                    .then(() => {
+                        document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                        window.location.href = '/login';
+                    });
+            }
+        }
+
+        // 標籤切換
+        function showTab(tabName) {
+            // 隱藏所有標籤內容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 移除所有標籤按鈕的active狀態
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 顯示選中的標籤
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // 載入用戶列表
+        function loadUsers() {
+            const sessionToken = getCookie('session_token');
+
+            fetch('/admin/users', {
+                headers: {
+                    'Authorization': sessionToken
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayUsers(data.users);
+                    } else {
+                        alert('載入用戶列表失敗: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('載入用戶失敗:', error);
+                    alert('載入用戶列表時發生錯誤');
+                });
+        }
+
+        // 顯示用戶列表
+        function displayUsers(users) {
+            document.getElementById('users-loading').style.display = 'none';
+            document.getElementById('users-content').style.display = 'block';
+
+            const tbody = document.getElementById('users-tbody');
+            tbody.innerHTML = '';
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+
+                const membershipClass = `membership-${user.membership_level}`;
+                const statusClass = user.is_active ? 'status-active' : 'status-inactive';
+                const statusText = user.is_active ? '啟用' : '停用';
+
+                row.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.email} ${user.is_admin ? '👑' : ''}</td>
+                    <td><span class="membership-badge ${membershipClass}">
+                        ${user.membership_level === 'basic' ? '初級會員' :
+                        user.membership_level === 'premium' ? '付費會員' : '超級會員'}
+                    </span></td>
+                    <td><span class="${statusClass}">${statusText}</span></td>
+                    <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                    <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : '未登入'}</td>
+                    <td>
+                        <div class="user-actions">
+                            <button class="btn btn-primary" onclick="openMembershipModal(${user.id}, '${user.membership_level}')">
+                                修改等級
+                            </button>
+                            <button class="btn ${user.is_active ? 'btn-warning' : 'btn-success'}" 
+                                    onclick="toggleUserStatus(${user.id}, ${user.is_active})">
+                                ${user.is_active ? '停用' : '啟用'}
+                            </button>
+                            <button class="btn btn-danger" onclick="openPasswordModal(${user.id})">
+                                重置密碼
+                            </button>
+                        </div>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // 打開會員等級修改模態框
+        function openMembershipModal(userId, currentLevel) {
+            currentUserId = userId;
+            document.getElementById('membershipSelect').value = currentLevel;
+            document.getElementById('membershipModal').style.display = 'block';
+        }
+
+        // 打開密碼重置模態框
+        function openPasswordModal(userId) {
+            currentUserId = userId;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+
+        // 關閉模態框
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            currentUserId = null;
+        }
+
+        // 更新會員等級
+        function updateMembership() {
+            const newLevel = document.getElementById('membershipSelect').value;
+            const sessionToken = getCookie('session_token');
+
+            fetch(`/admin/users/${currentUserId}/membership`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': sessionToken
+                },
+                body: JSON.stringify({
+                    membership_level: newLevel
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('會員等級更新成功');
+                        closeModal('membershipModal');
+                        loadUsers();
+                    } else {
+                        alert('更新失敗: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('更新會員等級失敗:', error);
+                    alert('更新時發生錯誤');
+                });
+        }
+
+        // 切換用戶狀態
+        function toggleUserStatus(userId, currentStatus) {
+            const action = currentStatus ? 'deactivate' : 'activate';
+            const actionText = currentStatus ? '停用' : '啟用';
+
+            if (!confirm(`確定要${actionText}此用戶嗎？`)) return;
+
+            const sessionToken = getCookie('session_token');
+
+            fetch(`/admin/users/${userId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': sessionToken
+                },
+                body: JSON.stringify({
+                    action: action
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`用戶${actionText}成功`);
+                        loadUsers();
+                    } else {
+                        alert(`${actionText}失敗: ` + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error(`${actionText}用戶失敗:`, error);
+                    alert(`${actionText}時發生錯誤`);
+                });
+        }
+
+        // 重置密碼
+        function resetPassword() {
+            const newPassword = document.getElementById('newPassword').value;
+
+            if (!newPassword || newPassword.length < 6) {
+                alert('密碼長度至少6位');
+                return;
+            }
+
+            if (!confirm('確定要重置此用戶的密碼嗎？用戶將需要重新登入。')) return;
+
+            const sessionToken = getCookie('session_token');
+
+            fetch(`/admin/users/${currentUserId}/password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': sessionToken
+                },
+                body: JSON.stringify({
+                    new_password: newPassword
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('密碼重置成功，該用戶需要重新登入');
+                        closeModal('passwordModal');
+                        loadUsers();
+                    } else {
+                        alert('重置失敗: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('重置密碼失敗:', error);
+                    alert('重置時發生錯誤');
+                });
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function (event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+
+        // 頁面載入時檢查認證
+        document.addEventListener('DOMContentLoaded', checkAuth);
+    </script>
+</body>
+
+</html>

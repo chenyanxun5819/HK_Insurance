@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - HK Insurance AML 查詢系統 <div
+            style="text-align: center; margin-top: 20px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 15px;">
+            🔧 版本 v2.4.0 | Claude 建議修復：日誌記錄、make_response、認證改善<br>
+            部署時間: 2025-09-04 21:45
+        </div>tle>
+        <!-- 版本: v2.4.0 - Claude 建議修復：日誌記錄、make_response、認證改善 - 2025-09-04 21:45 -->
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .login-container {
+                background: white;
+                padding: 40px;
+                border-radius: 10px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+                width: 100%;
+                max-width: 400px;
+            }
+
+            .login-header {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+
+            .login-header h1 {
+                color: #333;
+                font-size: 28px;
+                margin-bottom: 10px;
+            }
+
+            .login-header p {
+                color: #666;
+                font-size: 14px;
+            }
+
+            .admin-info {
+                background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+                color: white;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                font-size: 13px;
+                line-height: 1.4;
+            }
+
+            .admin-info h4 {
+                margin-bottom: 8px;
+                font-size: 14px;
+            }
+
+            .admin-credentials {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 8px;
+                border-radius: 4px;
+                margin: 5px 0;
+                font-family: monospace;
+            }
+
+            .form-group {
+                margin-bottom: 20px;
+            }
+
+            .form-group label {
+                display: block;
+                margin-bottom: 5px;
+                color: #333;
+                font-weight: 500;
+            }
+
+            .form-group input {
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #e1e1e1;
+                border-radius: 5px;
+                font-size: 16px;
+                transition: border-color 0.3s;
+            }
+
+            .form-group input:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+
+            .login-btn {
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 16px;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+
+            .login-btn:hover {
+                transform: translateY(-2px);
+            }
+
+            .login-btn:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+                transform: none;
+            }
+
+            .form-links {
+                text-align: center;
+                margin-top: 20px;
+            }
+
+            .form-links a {
+                color: #667eea;
+                text-decoration: none;
+            }
+
+            .form-links a:hover {
+                text-decoration: underline;
+            }
+
+            .alert {
+                padding: 10px;
+                margin-bottom: 20px;
+                border-radius: 5px;
+                display: none;
+            }
+
+            .alert.error {
+                background-color: #f8d7da;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+            }
+
+            .alert.success {
+                background-color: #d4edda;
+                color: #155724;
+                border: 1px solid #c3e6cb;
+            }
+        </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>用戶登入</h1>
+            <p>HK Insurance AML 查詢系統</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email 地址</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密碼</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="login-btn" id="loginBtn">登入</button>
+        </form>
+
+        <div class="form-links">
+            <p>還沒有帳號？ <a href="/register">立即註冊</a></p>
+            <p><a href="/forgot-password">忘記密碼？</a></p>
+        </div>
+
+        <div
+            style="text-align: center; margin-top: 20px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 15px;">
+            🔧 版本 v2.3.1 | 修復 session token 編碼問題<br>
+            部署時間: 2025-09-04 21:35
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const alert = document.getElementById('alert');
+
+        function showAlert(message, type) {
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.display = 'block';
+        }
+
+        function hideAlert() {
+            alert.style.display = 'none';
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert();
+
+            const formData = new FormData(loginForm);
+            const email = formData.get('email');
+            const password = formData.get('password');
+
+            if (!email || !password) {
+                showAlert('請填寫完整資訊', 'error');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登入中...';
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',  // 重要：包含 cookies
+                    body: JSON.stringify({ email, password })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('登入成功，正在跳轉...', 'success');
+                    // 給 cookie 一點時間設定，然後跳轉
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                } else {
+                    showAlert(result.message || '登入失敗', 'error');
+                }
+            } catch (error) {
+                showAlert('登入失敗，請稍後再試', 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登入';
+            }
+        });
+    </script>
+</body>
+
+</html>

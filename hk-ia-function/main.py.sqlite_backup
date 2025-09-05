@@ -1,0 +1,806 @@
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from takepdf import run_crawler, query_name, get_profiles_paginated, get_stats
+from user_management import UserManager
+from create_admin import create_admin_if_not_exists
+from database_manager import DatabaseManager
+import os
+import json
+import threading
+import time
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "hk-ia-db")
+DB_FILE = os.environ.get("DB_FILE", "aml_profiles.db")
+
+# 🔥 新增：資料庫持久化管理
+print("🚀 初始化資料庫管理器...")
+db_manager = DatabaseManager(BUCKET_NAME, DB_FILE)
+db_manager.download_database()  # 啟動時下載資料庫
+
+# 初始化用戶管理（使用持久化的資料庫路徑）
+user_manager = UserManager(db_path=db_manager.get_db_path())
+
+# 確保管理員帳戶存在
+create_admin_if_not_exists(user_manager, db_manager)
+
+# 🔄 啟動定期備份執行緒（減少即時備份壓力）
+def periodic_backup():
+    """定期備份資料庫"""
+    while True:
+        try:
+            time.sleep(300)  # 每5分鐘備份一次
+            print("🕐 執行定期資料庫備份...")
+            db_manager.upload_database(immediate=False)
+        except Exception as e:
+            print(f"❌ 定期備份失敗: {str(e)}")
+
+backup_thread = threading.Thread(target=periodic_backup, daemon=True)
+backup_thread.start()
+print("✅ 定期備份執行緒已啟動")
+
+def require_auth():
+    """檢查用戶認證"""
+    session_token = request.headers.get('Authorization') or request.cookies.get('session_token')
+    if not session_token:
+        print("DEBUG: No session token found")
+        return {'valid': False, 'message': '請先登入'}
+    
+    auth_result = user_manager.verify_session(session_token)
+    if not auth_result.get('valid'):
+        print(f"DEBUG: Session verification failed: {auth_result}")
+    return auth_result
+
+def require_admin():
+    """檢查管理員權限 - 最簡化版本，只檢查 email"""
+    session_token = request.headers.get('Authorization') or request.cookies.get('session_token')
+    print(f"DEBUG: Checking admin access with token: {session_token[:20] if session_token else 'None'}...")
+    
+    if not session_token:
+        print("DEBUG: No session token found")
+        return {'valid': False, 'message': '請先登入'}
+    
+    try:
+        # 使用用戶管理器驗證 session
+        auth_result = user_manager.verify_session(session_token)
+        print(f"DEBUG: Session verification result: {auth_result}")
+        
+        if auth_result.get('valid'):
+            user = auth_result.get('user', {})
+            user_email = user.get('email', '')
+            print(f"DEBUG: User email from session: {user_email}")
+            
+            # 只要是 astcws@hotmail.com 就允許管理
+            if user_email == 'astcws@hotmail.com':
+                print(f"DEBUG: Admin access granted for: {user_email}")
+                return auth_result
+            else:
+                print(f"DEBUG: Not admin email: {user_email}")
+                return {'valid': False, 'message': '非管理員帳戶'}
+        else:
+            print(f"DEBUG: Session invalid: {auth_result.get('message', 'Unknown error')}")
+            return {'valid': False, 'message': '請重新登入'}
+            
+    except Exception as e:
+        print(f"DEBUG: Admin check error: {str(e)}")
+        return {'valid': False, 'message': f'檢查失敗: {str(e)}'}
+
+@app.route("/", methods=["GET"])
+def home():
+    """主頁 - 需要登入才能訪問"""
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return redirect('/login')
+    
+    return render_template("query.html")
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """用戶註冊"""
+    if request.method == "GET":
+        return render_template("register.html")
+    
+    try:
+        data = request.get_json() if request.is_json else request.form
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not email or not password:
+            return jsonify({"success": False, "message": "請填寫完整資訊"}), 400
+        
+        # 簡單的email驗證
+        if '@' not in email or '.' not in email:
+            return jsonify({"success": False, "message": "請輸入有效的 Email 地址"}), 400
+        
+        result = user_manager.register_user(email, password)
+        
+        if result['success']:
+            # ✅ 立即備份資料庫（專家建議）
+            print("🔄 註冊成功，立即備份資料庫...")
+            try:
+                db_manager.immediate_backup()
+            except Exception as e:
+                print(f"⚠️ 註冊後備份失敗: {str(e)}")
+            return jsonify(result), 201
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({"success": False, "message": f"註冊失敗: {str(e)}"}), 500
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """用戶登入"""
+    if request.method == "GET":
+        return render_template("login.html")
+    
+    try:
+        data = request.get_json() if request.is_json else request.form
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not email or not password:
+            return jsonify({"success": False, "message": "請填寫完整資訊"}), 400
+        
+        result = user_manager.login_user(email, password)
+        
+        if result['success']:
+            # 設置cookie - 改進安全性設定
+            response = jsonify(result)
+            # 檢查是否為雲端 HTTPS 環境
+            is_secure = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
+            response.set_cookie('session_token', result['session_token'], 
+                              max_age=7*24*60*60,  # 延長到7天
+                              httponly=True, 
+                              secure=is_secure, 
+                              samesite='Lax',
+                              path='/')  # 確保所有路徑都可以訪問
+            return response, 200
+        else:
+            return jsonify(result), 401
+            
+    except Exception as e:
+        return jsonify({"success": False, "message": f"登入失敗: {str(e)}"}), 500
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    """用戶登出"""
+    try:
+        session_token = request.headers.get('Authorization') or request.cookies.get('session_token')
+        if session_token:
+            user_manager.logout_user(session_token)
+        
+        response = jsonify({"success": True, "message": "登出成功"})
+        response.set_cookie('session_token', '', expires=0)
+        return response, 200
+        
+    except Exception as e:
+        return jsonify({"success": False, "message": f"登出失敗: {str(e)}"}), 500
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """忘記密碼"""
+    if request.method == "GET":
+        return render_template("forgot_password.html")
+    
+    try:
+        data = request.get_json() if request.is_json else request.form
+        email = data.get('email', '').strip()
+        
+        if not email:
+            return jsonify({"success": False, "message": "請輸入電子郵件"}), 400
+        
+        result = user_manager.forgot_password(email)
+        
+        if result['success']:
+            # ✅ 密碼重設成功後立即備份（專家建議）
+            print("🔄 密碼重設成功，立即備份資料庫...")
+            try:
+                db_manager.immediate_backup()
+            except Exception as e:
+                print(f"⚠️ 密碼重設後備份失敗: {str(e)}")
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({"success": False, "message": f"重設密碼失敗: {str(e)}"}), 500
+
+@app.route("/profile", methods=["GET"])
+def profile():
+    """獲取用戶資料"""
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return jsonify(auth_result), 401
+    
+    user = auth_result['user']
+    
+    # 獲取查詢統計
+    query_stats = user_manager.check_query_limit(user['id'])
+    
+    return jsonify({
+        "success": True,
+        "user": user,
+        "query_stats": query_stats
+    }), 200
+
+@app.route("/change-password", methods=["POST"])
+def change_password():
+    """更改密碼"""
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return jsonify(auth_result), 401
+    
+    user = auth_result['user']
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"success": False, "message": "缺少請求數據"}), 400
+    
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    
+    if not old_password or not new_password:
+        return jsonify({"success": False, "message": "請提供舊密碼和新密碼"}), 400
+    
+    # 更改密碼
+    result = user_manager.change_password(user['id'], old_password, new_password)
+    
+    if result['success']:
+        # ✅ 立即備份資料庫（專家建議）
+        print("🔄 密碼更改成功，立即備份資料庫...")
+        try:
+            db_manager.immediate_backup()
+        except Exception as e:
+            print(f"⚠️ 密碼更改後備份失敗: {str(e)}")
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 400
+
+@app.route("/update", methods=["GET", "POST"])
+def update():
+    """更新資料庫 - 需要認證"""
+    # 檢查用戶認證
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return jsonify(auth_result), 401
+    
+    user = auth_result['user']
+    
+    # 這裡可以添加管理員權限檢查
+    # if user['email'] not in ['admin@example.com']:  # 管理員email列表
+    #     return jsonify({"success": False, "message": "只有管理員可以執行更新"}), 403
+    
+    try:
+        print(f"用戶 {user['email']} 觸發資料庫更新")
+        run_crawler(bucket_name=BUCKET_NAME, db_file=DB_FILE)
+        return jsonify({"success": True, "message": "更新完成", "user": user['email']}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"更新失敗: {str(e)}"}), 500
+
+@app.route("/query", methods=["GET"])
+def query():
+    # 檢查用戶認證
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return jsonify(auth_result), 401
+    
+    user = auth_result['user']
+    
+    # 檢查查詢限制
+    query_limit_check = user_manager.check_query_limit(user['id'])
+    if not query_limit_check['can_query']:
+        return jsonify({
+            "success": False, 
+            "message": f"已達到每日查詢限制 ({query_limit_check['daily_limit']} 次)",
+            "query_stats": query_limit_check
+        }), 429
+    
+    name = request.args.get("name")
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+    
+    if not name:
+        return jsonify({"error": "缺少 name 參數"}), 400
+    
+    try:
+        # 記錄查詢
+        user_manager.log_query(user['id'], 'name_search', json.dumps({'name': name, 'page': page}))
+        
+        # ✅ 查詢記錄後立即備份（專家建議）
+        try:
+            db_manager.immediate_backup()
+        except Exception as e:
+            print(f"⚠️ 查詢記錄後備份失敗: {str(e)}")
+        
+        # 如果在本地環境，直接使用本地數據庫進行分頁查詢
+        if os.path.exists('aml_profiles.db'):
+            import sqlite3
+            
+            conn = sqlite3.connect('aml_profiles.db')
+            cursor = conn.cursor()
+            
+            # 檢查表名
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [table[0] for table in cursor.fetchall()]
+            table_name = 'aml_profiles' if 'aml_profiles' in tables else 'profiles'
+            
+            # 查詢包含姓名的記錄總數（不分大小寫）
+            count_query = f"SELECT COUNT(*) FROM {table_name} WHERE LOWER(name) LIKE LOWER(?)"
+            cursor.execute(count_query, [f"%{name}%"])
+            total = cursor.fetchone()[0]
+            
+            if total == 0:
+                conn.close()
+                return jsonify({"found": False, "matches": [], "total": 0, "page": page, "per_page": per_page, "total_pages": 0}), 200
+            
+            # 計算分頁
+            total_pages = (total + per_page - 1) // per_page
+            offset = (page - 1) * per_page
+            
+            # 查詢分頁數據（不分大小寫）
+            query_sql = f"""
+            SELECT name, nationality, passport_no, year
+            FROM {table_name} 
+            WHERE LOWER(name) LIKE LOWER(?)
+            ORDER BY year DESC, name
+            LIMIT ? OFFSET ?
+            """
+            cursor.execute(query_sql, [f"%{name}%", per_page, offset])
+            rows = cursor.fetchall()
+            
+            profiles = []
+            for row in rows:
+                name_val, nationality, passport_no, year = row
+                profiles.append({
+                    'name': name_val,
+                    'nationality': nationality,
+                    'passport_no': passport_no,
+                    'year': year
+                })
+            
+            conn.close()
+            
+            # 更新查詢統計
+            updated_stats = user_manager.check_query_limit(user['id'])
+            
+            return jsonify({
+                "found": True,
+                "profiles": profiles,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "query_stats": updated_stats
+            }), 200
+        else:
+            # 雲端環境使用原來的方法
+            found, matches = query_name(bucket_name=BUCKET_NAME, db_file=DB_FILE, name=name)
+            # 將原始matches轉換為分頁格式
+            total = len(matches) if found else 0
+            total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            page_matches = matches[start_idx:end_idx] if found else []
+            
+            # 更新查詢統計
+            updated_stats = user_manager.check_query_limit(user['id'])
+            
+            return jsonify({
+                "found": found,
+                "matches": page_matches,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "query_stats": updated_stats
+            }), 200
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/profiles')
+def get_profiles():
+    """獲取分頁的制裁名單"""
+    # 檢查用戶認證
+    auth_result = require_auth()
+    if not auth_result.get('valid', False):
+        return jsonify(auth_result), 401
+    
+    user = auth_result['user']
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    nationality = request.args.get('nationality', '')
+    search_name = request.args.get('search_name', '')
+    
+    # 如果有搜尋條件，檢查查詢限制
+    if search_name or nationality:
+        query_limit_check = user_manager.check_query_limit(user['id'])
+        if not query_limit_check['can_query']:
+            return jsonify({
+                "success": False, 
+                "message": f"已達到每日查詢限制 ({query_limit_check['daily_limit']} 次)",
+                "query_stats": query_limit_check
+            }), 429
+        
+        # 記錄查詢
+        user_manager.log_query(user['id'], 'profiles_search', 
+                             json.dumps({'nationality': nationality, 'search_name': search_name, 'page': page}))
+    
+    # 如果在本地環境，直接使用本地數據庫
+    if os.path.exists('aml_profiles.db'):
+        import sqlite3
+        
+        try:
+            conn = sqlite3.connect('aml_profiles.db')
+            cursor = conn.cursor()
+            
+            # 檢查表名
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [table[0] for table in cursor.fetchall()]
+            table_name = 'aml_profiles' if 'aml_profiles' in tables else 'profiles'
+            
+            # 構建查詢條件
+            where_conditions = []
+            params = []
+            
+            if nationality and nationality.strip():
+                where_conditions.append("LOWER(nationality) LIKE LOWER(?)")
+                params.append(f"%{nationality.strip()}%")
+                
+            if search_name and search_name.strip():
+                where_conditions.append("LOWER(name) LIKE LOWER(?)")
+                params.append(f"%{search_name.strip()}%")
+            
+            where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+            
+            # 查詢總數
+            count_query = f"SELECT COUNT(*) FROM {table_name}{where_clause}"
+            cursor.execute(count_query, params)
+            total = cursor.fetchone()[0]
+            
+            # 計算分頁
+            total_pages = (total + per_page - 1) // per_page
+            offset = (page - 1) * per_page
+            
+            # 查詢數據
+            query = f"""
+            SELECT name, nationality, passport_no, year
+            FROM {table_name}{where_clause}
+            ORDER BY year DESC, name
+            LIMIT ? OFFSET ?
+            """
+            cursor.execute(query, params + [per_page, offset])
+            rows = cursor.fetchall()
+            
+            profiles = []
+            for row in rows:
+                name, nationality, passport_no, year = row
+                profiles.append({
+                    'name': name,
+                    'nationality': nationality,
+                    'passport_no': passport_no,
+                    'year': year,
+                    'source_pdf': '',
+                    'source_url': ''
+                })
+            
+            conn.close()
+            
+            # 獲取更新的查詢統計
+            updated_stats = user_manager.check_query_limit(user['id'])
+            
+            result = {
+                'profiles': profiles,
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': total_pages,
+                'has_prev': page > 1,
+                'has_next': page < total_pages,
+                'query_stats': updated_stats
+            }
+        except Exception as e:
+            print(f"本地數據庫查詢錯誤: {e}")
+            result = {
+                'profiles': [],
+                'total': 0,
+                'page': 1,
+                'per_page': per_page,
+                'total_pages': 0,
+                'has_prev': False,
+                'has_next': False
+            }
+    else:
+        # 雲端環境使用原來的方法
+        result = get_profiles_paginated('hk-ia-db', 'aml_profiles.db', page, per_page, 
+                                      nationality if nationality else None,
+                                      search_name if search_name else None)
+        
+        # 獲取更新的查詢統計
+        updated_stats = user_manager.check_query_limit(user['id'])
+        result['query_stats'] = updated_stats
+    
+    return jsonify(result)
+    """分頁瀏覽制裁名單"""
+    try:
+        page = int(request.args.get("page", 1))
+        nationality = request.args.get("nationality", "").strip()
+        per_page = 20
+        
+        data = get_profiles_paginated(
+            bucket_name=BUCKET_NAME, 
+            db_file=DB_FILE, 
+            page=page, 
+            per_page=per_page,
+            nationality=nationality
+        )
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/stats", methods=["GET"])
+def stats():
+    """獲取統計資訊"""
+    try:
+        # 如果在本地環境，直接使用本地數據庫
+        if os.path.exists('aml_profiles.db'):
+            import sqlite3
+            
+            conn = sqlite3.connect('aml_profiles.db')
+            cursor = conn.cursor()
+            
+            # 檢查表名
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [table[0] for table in cursor.fetchall()]
+            table_name = 'aml_profiles' if 'aml_profiles' in tables else 'profiles'
+            
+            # 總數統計
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            total_profiles = cursor.fetchone()[0]
+            
+            # 年份統計
+            cursor.execute(f"SELECT year, COUNT(*) as count FROM {table_name} GROUP BY year ORDER BY year DESC")
+            year_stats = cursor.fetchall()
+            
+            # 國籍統計
+            cursor.execute(f"SELECT nationality, COUNT(*) as count FROM {table_name} GROUP BY nationality ORDER BY count DESC LIMIT 10")
+            nationality_stats = cursor.fetchall()
+            
+            # 最新數據年份
+            cursor.execute(f"SELECT MAX(year) FROM {table_name}")
+            latest_year = cursor.fetchone()[0]
+            
+            conn.close()
+            
+            data = {
+                'total_profiles': total_profiles,
+                'latest_year': latest_year,
+                'year_stats': year_stats,
+                'nationality_stats': nationality_stats
+            }
+        else:
+            # 雲端環境使用原來的方法
+            data = get_stats(bucket_name=BUCKET_NAME, db_file=DB_FILE)
+        
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ========== 管理員功能 ==========
+
+@app.route("/force-admin-login", methods=["GET"])
+def force_admin_login():
+    """強制管理員登入 - 僅用於調試"""
+    try:
+        # 直接登入管理員帳戶
+        result = user_manager.login_user("astcws@hotmail.com", "admin123")
+        
+        if result['success']:
+            response = jsonify({
+                "success": True,
+                "message": "管理員強制登入成功",
+                "redirect": "/admin"
+            })
+            
+            # 設置 cookie
+            is_secure = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
+            response.set_cookie('session_token', result['session_token'], 
+                              max_age=7*24*60*60,
+                              httponly=True, 
+                              secure=is_secure, 
+                              samesite='Lax',
+                              path='/')
+            return response
+        else:
+            return jsonify({"success": False, "message": f"登入失敗: {result['message']}"})
+            
+    except Exception as e:
+        return jsonify({"success": False, "message": f"錯誤: {str(e)}"})
+
+@app.route("/debug-auth", methods=["GET"])
+def debug_auth():
+    """調試認證狀態"""
+    session_token = request.cookies.get('session_token')
+    
+    debug_info = {
+        'has_session_token': bool(session_token),
+        'session_token_preview': session_token[:20] if session_token else None,
+        'cookies': dict(request.cookies),
+        'headers': dict(request.headers)
+    }
+    
+    if session_token:
+        admin_check = require_admin()
+        debug_info['admin_check'] = admin_check
+    
+    return jsonify(debug_info)
+
+@app.route("/admin", methods=["GET"])
+def admin_panel():
+    """管理員面板"""
+    print("=== DEBUG: Admin panel accessed ===")
+    
+    # 檢查 cookies
+    session_token = request.cookies.get('session_token')
+    print(f"DEBUG: Session token from cookie: {session_token[:20] if session_token else 'None'}...")
+    
+    # 先檢查用戶認證
+    auth_result = require_auth()
+    print(f"DEBUG: Auth result: {auth_result}")
+    
+    if not auth_result.get('valid'):
+        print(f"DEBUG: Auth failed, redirecting to login")
+        return redirect("/login")
+    
+    # 檢查是否為管理員 email
+    user = auth_result.get('user', {})
+    user_email = user.get('email', '')
+    print(f"DEBUG: User email: {user_email}")
+    
+    if user_email != 'astcws@hotmail.com':
+        print(f"DEBUG: Not admin email, redirecting to login")
+        return redirect("/login")
+    
+    print(f"DEBUG: Admin access granted, rendering admin.html")
+    return render_template("admin.html")
+
+@app.route("/admin/users", methods=["GET"])
+def admin_get_users():
+    """獲取所有用戶列表（管理員功能）"""
+    admin_check = require_admin()
+    if not admin_check.get('valid'):
+        return jsonify(admin_check), 403
+    
+    result = user_manager.get_all_users()
+    if result['success']:
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 500
+
+@app.route("/admin/users/<int:user_id>/membership", methods=["PUT"])
+def admin_update_membership(user_id):
+    """更新用戶會員等級（管理員功能）"""
+    admin_check = require_admin()
+    if not admin_check.get('valid'):
+        return jsonify(admin_check), 403
+    
+    try:
+        data = request.get_json()
+        new_level = data.get('membership_level')
+        
+        if new_level not in ['basic', 'premium', 'super']:
+            return jsonify({"success": False, "message": "無效的會員等級"}), 400
+        
+        result = user_manager.update_user_membership(user_id, new_level)
+        if result['success']:
+            # ✅ 管理員更新會員等級後立即備份（專家建議）
+            print("🔄 會員等級更新成功，立即備份資料庫...")
+            try:
+                db_manager.immediate_backup()
+            except Exception as e:
+                print(f"⚠️ 會員等級更新後備份失敗: {str(e)}")
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/admin/users/<int:user_id>/status", methods=["PUT"])
+def admin_update_user_status(user_id):
+    """啟用/停用用戶（管理員功能）"""
+    admin_check = require_admin()
+    if not admin_check.get('valid'):
+        return jsonify(admin_check), 403
+    
+    try:
+        data = request.get_json()
+        action = data.get('action')  # 'activate' or 'deactivate'
+        
+        if action == 'activate':
+            result = user_manager.activate_user(user_id)
+        elif action == 'deactivate':
+            result = user_manager.deactivate_user(user_id)
+        else:
+            return jsonify({"success": False, "message": "無效的操作"}), 400
+        
+        if result['success']:
+            # ✅ 管理員用戶狀態更新後立即備份（專家建議）
+            print("🔄 用戶狀態更新成功，立即備份資料庫...")
+            try:
+                db_manager.immediate_backup()
+            except Exception as e:
+                print(f"⚠️ 用戶狀態更新後備份失敗: {str(e)}")
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/admin/users/<int:user_id>/password", methods=["PUT"])
+def admin_reset_password(user_id):
+    """重置用戶密碼（管理員功能）"""
+    admin_check = require_admin()
+    if not admin_check.get('valid'):
+        return jsonify(admin_check), 403
+    
+    try:
+        data = request.get_json()
+        new_password = data.get('new_password')
+        
+        if not new_password or len(new_password) < 6:
+            return jsonify({"success": False, "message": "密碼長度至少6位"}), 400
+        
+        result = user_manager.reset_user_password(user_id, new_password)
+        if result['success']:
+            # ✅ 管理員重置密碼後立即備份（專家建議）
+            print("🔄 管理員重置密碼成功，立即備份資料庫...")
+            try:
+                db_manager.immediate_backup()
+            except Exception as e:
+                print(f"⚠️ 管理員重置密碼後備份失敗: {str(e)}")
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/admin/users/<int:user_id>/stats", methods=["GET"])
+def admin_get_user_stats(user_id):
+    """獲取用戶查詢統計（管理員功能）"""
+    admin_check = require_admin()
+    if not admin_check.get('valid'):
+        return jsonify(admin_check), 403
+    
+    result = user_manager.get_user_query_stats(user_id)
+    if result['success']:
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 500
+
+if __name__ == "__main__":
+    # 設置資料庫定期備份
+    import threading
+    import time
+    
+    def periodic_backup():
+        """定期備份資料庫"""
+        while True:
+            time.sleep(300)  # 每5分鐘備份一次
+            try:
+                db_manager.upload_database()
+                print("🔄 定期備份完成")
+            except Exception as e:
+                print(f"❌ 定期備份失敗: {str(e)}")
+    
+    # 啟動背景備份執行緒
+    backup_thread = threading.Thread(target=periodic_backup, daemon=True)
+    backup_thread.start()
+    
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
