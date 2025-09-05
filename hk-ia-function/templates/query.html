@@ -346,11 +346,12 @@
                         <th>國籍</th>
                         <th>護照號碼</th>
                         <th>年份</th>
+                        <th>資料來源</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
                     <tr>
-                        <td colspan="5" class="loading">正在載入資料...</td>
+                        <td colspan="6" class="loading">正在載入資料...</td>
                     </tr>
                 </tbody>
             </table>
@@ -465,7 +466,7 @@
             if (isLoading) return;
 
             isLoading = true;
-            tableBody.innerHTML = '<tr><td colspan="5" class="loading">正在載入資料...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" class="loading">正在載入資料...</td></tr>';
 
             try {
                 const params = new URLSearchParams({
@@ -510,7 +511,7 @@
 
             } catch (error) {
                 console.error('載入資料失敗:', error);
-                tableBody.innerHTML = `<tr><td colspan="5" class="error">載入失敗: ${error.message}</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="6" class="error">載入失敗: ${error.message}</td></tr>`;
             } finally {
                 isLoading = false;
             }
@@ -519,7 +520,7 @@
         // 渲染表格
         function renderTable(profiles, page) {
             if (profiles.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #666;">沒有找到符合條件的資料</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #666;">沒有找到符合條件的資料</td></tr>';
                 return;
             }
 
@@ -531,6 +532,7 @@
                     <td>${escapeHtml(profile.nationality)} ${profile.year ? `<span class="badge">${profile.year}</span>` : ''}</td>
                     <td>${escapeHtml(profile.passport_no)}</td>
                     <td>${profile.year || '-'}</td>
+                    <td>${profile.source_url ? `<a href="${escapeHtml(profile.source_url)}" target="_blank" style="color: #3182ce; text-decoration: none;">連結</a>` : '-'}</td>
                 </tr>
             `).join('');
         }
@@ -622,7 +624,7 @@
             if (isLoading) return;
 
             isLoading = true;
-            tableBody.innerHTML = '<tr><td colspan="5" class="loading">正在查詢...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" class="loading">正在查詢...</td></tr>';
 
             try {
                 const params = new URLSearchParams({
@@ -693,7 +695,7 @@
         // 渲染查詢結果表格
         function renderSearchResultTable(profiles, page) {
             if (profiles.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #666;">沒有找到符合條件的資料</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #666;">沒有找到符合條件的資料</td></tr>';
                 return;
             }
 
@@ -705,6 +707,7 @@
                     <td>${escapeHtml(profile.nationality)} ${profile.year ? `<span class="badge">${profile.year}</span>` : ''}</td>
                     <td>${escapeHtml(profile.passport_no)}</td>
                     <td>${profile.year || '-'}</td>
+                    <td>${profile.source_url ? `<a href="${escapeHtml(profile.source_url)}" target="_blank" style="color: #3182ce; text-decoration: none;">連結</a>` : '-'}</td>
                 </tr>
             `).join('');
         }
@@ -764,7 +767,7 @@
             pageInfo.textContent = message;
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 2rem; color: ${type === 'error' ? '#c53030' : '#666'};">
+                    <td colspan="6" style="text-align: center; padding: 2rem; color: ${type === 'error' ? '#c53030' : '#666'};">
                         ${escapeHtml(message)}
                     </td>
                 </tr>
