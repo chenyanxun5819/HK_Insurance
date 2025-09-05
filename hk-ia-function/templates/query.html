@@ -320,24 +320,25 @@
                     <label for="nameSearch">姓名查詢</label>
                     <input id="nameSearch" type="text" placeholder="輸入英文姓名，例如：Mohammed" />
                 </div>
-                <div class="search-group">
-                    <label for="nationalityFilter">國籍過濾</label>
-                    <input id="nationalityFilter" type="text" placeholder="輸入國籍，例如：Pakistan" />
-                </div>
                 <button id="searchBtn">查詢</button>
                 <button id="clearBtn" style="background: #718096;">清除</button>
             </div>
             <div id="searchResult"></div>
+            
+            <!-- 統計資訊顯示 -->
+            <div class="stats-display" id="statsDisplay" style="margin-top: 1rem; padding: 1rem; background: #edf2f7; border-radius: 4px; color: #4a5568; font-size: 0.9rem;">
+                載入統計資訊中...
+            </div>
         </div>
 
         <!-- 統計資訊 -->
-        <div class="stats-bar">
+        <div class="stats-bar" id="statsBar" style="display: none;">
             <div class="stats-info" id="statsInfo">載入中...</div>
             <div class="stats-info" id="pageInfo"></div>
         </div>
 
         <!-- 資料表格 -->
-        <div class="table-container">
+        <div class="table-container" id="tableContainer" style="display: none;">
             <table>
                 <thead>
                     <tr>
@@ -358,7 +359,7 @@
         </div>
 
         <!-- 分頁導航 -->
-        <div class="pagination" id="pagination"></div>
+        <div class="pagination" id="pagination" style="display: none;"></div>
     </div>
 
     <script>
@@ -410,30 +411,27 @@
 
         // DOM 元素
         const nameSearch = document.getElementById('nameSearch');
-        const nationalityFilter = document.getElementById('nationalityFilter');
         const searchBtn = document.getElementById('searchBtn');
         const clearBtn = document.getElementById('clearBtn');
         const searchResult = document.getElementById('searchResult');
+        const statsDisplay = document.getElementById('statsDisplay');
+        const statsBar = document.getElementById('statsBar');
         const statsInfo = document.getElementById('statsInfo');
         const pageInfo = document.getElementById('pageInfo');
+        const tableContainer = document.getElementById('tableContainer');
         const tableBody = document.getElementById('tableBody');
         const pagination = document.getElementById('pagination');
 
         // 初始化
         document.addEventListener('DOMContentLoaded', async function () {
-            // 不再需要認證檢查，直接載入數據
+            // 載入並顯示統計資訊
             loadStats();
-            loadProfiles();
 
             // 事件監聽
             searchBtn.addEventListener('click', performSearch);
             clearBtn.addEventListener('click', clearFilters);
 
             nameSearch.addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') performSearch();
-            });
-
-            nationalityFilter.addEventListener('keypress', function (e) {
                 if (e.key === 'Enter') performSearch();
             });
         });
@@ -447,17 +445,17 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    statsInfo.textContent = '統計資訊載入失敗';
+                    statsDisplay.textContent = '統計資訊載入失敗';
                     return;
                 }
 
                 const totalText = `總計 ${(data.total_profiles || 0).toLocaleString()} 筆制裁資料`;
                 const yearText = `涵蓋 ${data.year_stats?.length || 0} 個年份 (${data.year_stats?.[data.year_stats.length - 1]?.year || ''}-${data.year_stats?.[0]?.year || ''})`;
-                statsInfo.textContent = `${totalText} • ${yearText}`;
+                statsDisplay.textContent = `${totalText} • ${yearText}`;
 
             } catch (error) {
                 console.error('載入統計失敗:', error);
-                statsInfo.textContent = '統計資訊載入失敗';
+                statsDisplay.textContent = '統計資訊載入失敗';
             }
         }
 
@@ -506,7 +504,9 @@
                 renderPagination(data);
                 updatePageInfo(data);
 
-                // 確保分頁控制在瀏覽模式下顯示
+                // 顯示表格相關元素
+                tableContainer.style.display = 'block';
+                statsBar.style.display = 'flex';
                 pagination.style.display = 'flex';
 
             } catch (error) {
@@ -596,26 +596,16 @@
         // 執行搜尋
         async function performSearch() {
             const name = nameSearch.value.trim();
-            const nationality = nationalityFilter.value.trim();
 
             searchResult.innerHTML = '';
 
             // 判斷是否有查詢條件
-            const hasSearchConditions = name || nationality;
-
-            if (hasSearchConditions) {
+            if (name) {
                 // 查詢模式：顯示查詢結果在表格中
-                if (name) {
-                    // 有姓名查詢時，載入分頁查詢結果
-                    loadNameSearchResults(name, 1);
-                } else if (nationality) {
-                    // 只有國籍過濾時，載入過濾後的分頁資料
-                    loadProfiles(1, nationality);
-                }
+                loadNameSearchResults(name, 1);
             } else {
-                // 瀏覽模式：載入完整資料庫
-                currentSearchName = '';
-                loadProfiles(1, '');
+                // 清空查詢，隱藏表格
+                hideTable();
             }
         }
 
@@ -673,7 +663,9 @@
                 renderSearchPagination(data);
                 updateSearchPageInfo(data, name);
 
-                // 確保分頁控制顯示
+                // 顯示表格相關元素
+                tableContainer.style.display = 'block';
+                statsBar.style.display = 'flex';
                 pagination.style.display = 'flex';
 
             } catch (error) {
@@ -686,10 +678,16 @@
         // 清除過濾條件
         function clearFilters() {
             nameSearch.value = '';
-            nationalityFilter.value = '';
             searchResult.innerHTML = '';
             currentSearchName = '';
-            loadProfiles(1, '');
+            hideTable();
+        }
+
+        // 隱藏表格和相關元素
+        function hideTable() {
+            tableContainer.style.display = 'none';
+            statsBar.style.display = 'none';
+            pagination.style.display = 'none';
         }
 
         // 渲染查詢結果表格
@@ -772,6 +770,8 @@
                     </td>
                 </tr>
             `;
+            tableContainer.style.display = 'block';
+            statsBar.style.display = 'flex';
             pagination.style.display = 'none';
         }
 
