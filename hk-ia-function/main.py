@@ -3,6 +3,7 @@ from takepdf import run_crawler, query_name, get_profiles_paginated, get_stats
 from user_management_firestore import UserManager
 from create_admin import create_admin_if_not_exists
 from firestore_aml_query import FirestoreAMLQuery
+from firestore_aml_updater import get_updater
 import os
 import json
 import logging
@@ -10,16 +11,21 @@ import logging
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
+# 設置 JSON 編碼，確保中文字符正確顯示
+app.config['JSON_AS_ASCII'] = False
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+
 # 設置日誌以便調試
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 🎉 Firestore 版本 - 使用模擬器進行開發
-print("🚀 初始化 Firestore 用戶管理器 (模擬器模式)...")
-user_manager = UserManager(use_emulator=True)
+# 🎉 Firestore 版本 - 自動檢測環境
+USE_EMULATOR = os.environ.get('FIRESTORE_EMULATOR_HOST') is not None
+print(f"🚀 初始化 Firestore 用戶管理器 ({'模擬器模式' if USE_EMULATOR else 'GCP生產模式'})...")
+user_manager = UserManager(use_emulator=USE_EMULATOR)
 
 print("🚀 初始化 Firestore AML 查詢引擎...")
-aml_query = FirestoreAMLQuery(use_emulator=True)
+aml_query = FirestoreAMLQuery(use_emulator=USE_EMULATOR)
 
 # 確保管理員帳戶存在
 create_admin_if_not_exists(user_manager)
@@ -190,20 +196,38 @@ def profile():
 @app.route("/query", methods=["GET"])
 def query():
     """AML 查詢功能 - 無需認證"""
-    name = request.args.get("name")
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 20, type=int)
-    
-    if not name:
-        return jsonify({"error": "缺少 name 參數"}), 400
+    # 正確處理 URL 編碼的參數
+    try:
+        name = request.args.get("name", '').strip()
+        if not name:
+            return jsonify({"error": "缺少 name 參數"}), 400
+        
+        # 確保正確解碼 UTF-8 字符
+        try:
+            name = name.encode('latin1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            # 如果解碼失敗，保持原始字符串
+            pass
+            
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 20, type=int)
+        
+    except Exception as e:
+        return jsonify({"error": f"參數處理失敗: {str(e)}"}), 400
     
     try:
         # 🔥 使用 Firestore AML 查詢引擎
         result = aml_query.search_by_name(name, page, per_page)
-        return jsonify(result), 200
+        
+        # 確保響應使用正確的 Content-Type 和編碼
+        response = make_response(jsonify(result))
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response, 200
             
     except Exception as e:
-        return jsonify({"error": f"查詢失敗: {str(e)}"}), 500
+        error_response = make_response(jsonify({"error": f"查詢失敗: {str(e)}"}))
+        error_response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return error_response, 500
 
 @app.route("/stats", methods=["GET"])
 def get_stats():
@@ -220,6 +244,36 @@ def get_stats():
             "year_stats": []
         }), 500
 
+@app.route("/update", methods=["GET", "POST"])
+def update():
+    """更新 AML 制裁名單資料 - 無需認證"""
+    try:
+        print("🚀 開始更新 AML 制裁名單資料...")
+        
+        # 🔥 使用 Firestore 版本的資料更新器 - 自動檢測環境
+        updater = get_updater(use_emulator=USE_EMULATOR)
+        
+        # 獲取可選的年份參數
+        year = request.args.get('year', type=int)
+        if year:
+            print(f"📅 指定更新年份: {year}")
+        
+        # 執行更新
+        result = updater.update_aml_data(year=year)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+        
+    except Exception as e:
+        return jsonify({
+            "success": False, 
+            "message": f"更新失敗: {str(e)}",
+            "processed_files": 0,
+            "new_records": 0
+        }), 500
+
 @app.route("/profiles", methods=["GET"])
 def get_profiles():
     """分頁獲取 AML 制裁名單資料 - 無需認證"""
@@ -230,15 +284,22 @@ def get_profiles():
         
         # 🔥 使用 Firestore AML 查詢引擎
         result = aml_query.get_profiles_paginated(page, per_page, nationality)
-        return jsonify(result), 200
+        
+        # 確保響應使用正確的 Content-Type 和編碼
+        response = make_response(jsonify(result))
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return response, 200
             
     except Exception as e:
-        return jsonify({
+        error_result = {
             "success": False,
             "error": f"獲取資料失敗: {str(e)}",
             "profiles": [],
             "total_profiles": 0
-        }), 500
+        }
+        error_response = make_response(jsonify(error_result))
+        error_response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        return error_response, 500
 
 @app.route("/admin", methods=["GET"])
 def admin_panel():

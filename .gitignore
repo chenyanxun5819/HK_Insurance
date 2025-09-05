@@ -42,6 +42,10 @@ Thumbs.db
 firebase-debug.log
 firestore-debug.log
 
+# Firebase 模擬器備份（包含敏感資料，檔案較大）
+emulator_backup/
+emulator_backup_*/
+
 # 下載的 PDF 文件（太大）
 downloads/
 

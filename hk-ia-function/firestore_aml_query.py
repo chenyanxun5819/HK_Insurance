@@ -48,7 +48,7 @@ class FirestoreAMLQuery:
             
             return {
                 "found": total > 0,
-                "matches": page_matches,
+                "profiles": page_matches,  # 修改為 profiles 匹配前端期望
                 "total": total,
                 "page": page,
                 "per_page": per_page,

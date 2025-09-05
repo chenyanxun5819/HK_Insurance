@@ -1,26 +1,44 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 用戶文檔 - 只有用戶自己可以讀寫
+
+    // 所有會員資料
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 任何已登入使用者可以讀取自己的資料
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // 會員可以更新自己的基本資料（不能改角色與查詢額度）
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && !( 'role' in request.resource.data.diff(resource.data).affectedKeys()
+                          || 'queryLimit' in request.resource.data.diff(resource.data).affectedKeys()
+                          || 'queriesUsed' in request.resource.data.diff(resource.data).affectedKeys()
+                          || 'status' in request.resource.data.diff(resource.data).affectedKeys()
+                        );
+
+      // 管理員可以讀寫所有會員資料
+      allow read, write: if request.auth != null
+                         && request.auth.token.role == 'admin';
     }
-    
-    // 會話文檔 - 只有認證用戶可以讀寫自己的會話
-    match /sessions/{sessionId} {
-      allow read, write: if request.auth != null;
+
+    // 查詢紀錄
+    match /queryLogs/{logId} {
+      // 會員只能讀取自己的查詢紀錄
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.uid;
+
+      // 會員只能新增屬於自己的查詢紀錄
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid;
+
+      // 不允許會員自行修改或刪除紀錄
+      allow update, delete: if false;
+
+      // 管理員可讀取所有紀錄
+      allow read: if request.auth != null
+                  && request.auth.token.role == 'admin';
     }
-    
-    // 查詢日誌 - 只有認證用戶可以讀寫
-    match /query_logs/{logId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // 管理員功能 - 只有管理員可以存取
-    match /admin/{document=**} {
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_admin == true;
-    }
+
+    // 其他集合（可依需求擴充）
   }
 }
