@@ -324,16 +324,15 @@
                 <button id="clearBtn" style="background: #718096;">清除</button>
             </div>
             <div id="searchResult"></div>
-            
-            <!-- 統計資訊顯示 -->
-            <div class="stats-display" id="statsDisplay" style="margin-top: 1rem; padding: 1rem; background: #edf2f7; border-radius: 4px; color: #4a5568; font-size: 0.9rem;">
-                載入統計資訊中...
-            </div>
         </div>
 
-        <!-- 統計資訊 -->
+        <!-- 獨立的統計資訊顯示 -->
+        <div class="stats-display" id="statsDisplay" style="margin-bottom: 1rem; padding: 1rem; background: #edf2f7; border-radius: 4px; color: #4a5568; font-size: 0.9rem;">
+            載入統計資訊中...
+        </div>
+
+        <!-- 查詢時的統計資訊 -->
         <div class="stats-bar" id="statsBar" style="display: none;">
-            <div class="stats-info" id="statsInfo">載入中...</div>
             <div class="stats-info" id="pageInfo"></div>
         </div>
 
@@ -367,7 +366,6 @@
         let currentPage = 1;
         let totalPages = 1;
         let isLoading = false;
-        let currentNationality = '';
         let currentSearchName = '';
         let currentUser = null;
 
@@ -416,7 +414,6 @@
         const searchResult = document.getElementById('searchResult');
         const statsDisplay = document.getElementById('statsDisplay');
         const statsBar = document.getElementById('statsBar');
-        const statsInfo = document.getElementById('statsInfo');
         const pageInfo = document.getElementById('pageInfo');
         const tableContainer = document.getElementById('tableContainer');
         const tableBody = document.getElementById('tableBody');
@@ -459,8 +456,8 @@
             }
         }
 
-        // 載入制裁名單
-        async function loadProfiles(page = 1, nationality = '') {
+        // 載入制裁名單（僅在查詢時使用）
+        async function loadProfiles(page = 1) {
             if (isLoading) return;
 
             isLoading = true;
@@ -468,15 +465,12 @@
 
             try {
                 const params = new URLSearchParams({
-                    page: page,
-                    nationality: nationality
+                    page: page
                 });
 
                 const response = await fetch(`/profiles?${params}`, {
                     credentials: 'include'
                 });
-
-                // 移除 401 錯誤處理，因為不再需要認證
 
                 if (response.status === 429) {
                     const data = await response.json();
@@ -498,7 +492,6 @@
 
                 currentPage = data.page;
                 totalPages = data.total_pages;
-                currentNationality = nationality;
 
                 renderTable(data.profiles, page);
                 renderPagination(data);
@@ -589,7 +582,7 @@
                 loadNameSearchResults(currentSearchName, page);
             } else {
                 // 瀏覽模式，使用一般分頁
-                loadProfiles(page, currentNationality);
+                loadProfiles(page);
             }
         }
 
@@ -656,7 +649,6 @@
                 currentSearchName = name;
                 currentPage = data.page;
                 totalPages = data.total_pages;
-                currentNationality = '';
 
                 // 渲染查詢結果
                 renderSearchResultTable(data.profiles, page);
@@ -761,7 +753,6 @@
 
         // 在表格中顯示訊息
         function showTableMessage(message, type = 'info') {
-            const className = type === 'error' ? 'error' : 'info';
             pageInfo.textContent = message;
             tableBody.innerHTML = `
                 <tr>
