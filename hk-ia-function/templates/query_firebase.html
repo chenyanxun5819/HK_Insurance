@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>反洗錢制裁名單查詢系統</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f8f9fa;
+        }
+
+        .user-bar {
+            background: #667eea;
+            color: white;
+            padding: 1rem 2rem;
+            margin: -2rem -2rem 2rem -2rem;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logout-btn,
+        .admin-btn,
+        .login-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .logout-btn:hover,
+        .admin-btn:hover,
+        .login-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .data-source {
+            color: #718096;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .search-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .search-group {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3182ce;
+        }
+
+        button {
+            background: #3182ce;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background: #2c5282;
+        }
+
+        button:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .stats-display {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .stats-bar {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .pagination button {
+            background: #e2e8f0;
+            color: #4a5568;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #cbd5e0;
+        }
+
+        .pagination button.active {
+            background: #3182ce;
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #2d7d32;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: #3182ce;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+        }
+
+        .auth-required {
+            background: #fed7d7;
+            border: 1px solid #f56565;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .search-row {
+                flex-direction: column;
+            }
+
+            .stats-bar {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+
+            .pagination {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 用戶狀態欄 -->
+        <div class="user-bar" id="userBar">
+            <div class="user-info">
+                <span id="userWelcome">🏦 HK Insurance AML 查詢系統</span>
+                <span id="userEmail" style="display: none;"></span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button class="admin-btn" id="adminBtn" onclick="window.location.href='/admin'"
+                    style="display: none;">👑 管理</button>
+                <a href="/login" class="login-btn" id="loginBtn">🔑 登入</a>
+                <button class="logout-btn" id="logoutBtn" onclick="logout()" style="display: none;">登出</button>
+            </div>
+        </div>
+
+        <h1>反洗錢制裁名單查詢系統</h1>
+        <p class="data-source">資料來源：香港保險業監管局</p>
+
+        <!-- 搜尋區域 -->
+        <div class="search-section">
+            <div class="search-row">
+                <div class="search-group">
+                    <label for="nameSearch">姓名查詢</label>
+                    <input id="nameSearch" type="text" placeholder="輸入英文姓名，例如：Mohammed" />
+                </div>
+                <button id="searchBtn">查詢</button>
+                <button id="clearBtn" style="background: #718096;">清除</button>
+            </div>
+            <div id="searchResult"></div>
+        </div>
+
+        <!-- 身份驗證提示 -->
+        <div id="authRequired" class="auth-required" style="display: none;">
+            <h3>🔒 需要登入才能進行查詢</h3>
+            <p>請先 <a href="/login" style="color: #3182ce;">登入</a> 或 <a href="/register" style="color: #3182ce;">註冊</a> 以使用查詢功能</p>
+        </div>
+
+        <!-- 獨立的統計資訊顯示 -->
+        <div class="stats-display" id="statsDisplay">
+            載入統計資訊中...
+        </div>
+
+        <!-- 查詢時的統計資訊 -->
+        <div class="stats-bar" id="statsBar" style="display: none;">
+            <div class="stats-info" id="pageInfo"></div>
+        </div>
+
+        <!-- 資料表格 -->
+        <div class="table-container" id="tableContainer" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>序號</th>
+                        <th>姓名</th>
+                        <th>國籍</th>
+                        <th>護照號碼</th>
+                        <th>年份</th>
+                        <th>資料來源</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="6" class="loading">正在載入資料...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁導航 -->
+        <div class="pagination" id="pagination" style="display: none;"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Firebase 配置 (Emulator 模式)
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        const firebaseConfig = {
+            apiKey: "demo-key",
+            authDomain: "demo-project.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "demo-app-id"
+        };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // 連接到 Auth Emulator (如果在開發環境)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            connectAuthEmulator(auth, "http://127.0.0.1:9099");
+        }
+
+        // 全域變數
+        let currentPage = 1;
+        let totalPages = 1;
+        let isLoading = false;
+        let currentSearchName = '';
+        let currentUser = null;
+        let currentToken = null;
+
+        // DOM 元素
+        const nameSearch = document.getElementById('nameSearch');
+        const searchBtn = document.getElementById('searchBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const searchResult = document.getElementById('searchResult');
+        const statsDisplay = document.getElementById('statsDisplay');
+        const statsBar = document.getElementById('statsBar');
+        const pageInfo = document.getElementById('pageInfo');
+        const tableContainer = document.getElementById('tableContainer');
+        const tableBody = document.getElementById('tableBody');
+        const pagination = document.getElementById('pagination');
+        const userWelcome = document.getElementById('userWelcome');
+        const userEmail = document.getElementById('userEmail');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const adminBtn = document.getElementById('adminBtn');
+        const authRequired = document.getElementById('authRequired');
+
+        // 認證狀態監聽
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            
+            if (user) {
+                // 用戶已登入
+                currentToken = await user.getIdToken();
+                
+                // 更新 UI
+                userWelcome.textContent = `👤 ${user.email}`;
+                userEmail.style.display = 'inline';
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                authRequired.style.display = 'none';
+                
+                // 檢查是否為管理員
+                checkAdminRole(user);
+                
+                console.log('用戶已登入:', user.email);
+            } else {
+                // 用戶未登入
+                currentToken = null;
+                
+                // 更新 UI
+                userWelcome.textContent = '🏦 HK Insurance AML 查詢系統';
+                userEmail.style.display = 'none';
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                adminBtn.style.display = 'none';
+                
+                console.log('用戶未登入');
+            }
+        });
+
+        // 檢查管理員角色
+        async function checkAdminRole(user) {
+            try {
+                const token = await user.getIdToken();
+                const response = await fetch('/api/auth/status', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.user && data.user.role === 'admin') {
+                        adminBtn.style.display = 'inline-block';
+                    }
+                }
+            } catch (error) {
+                console.error('檢查管理員權限失敗:', error);
+            }
+        }
+
+        // 登出函數
+        window.logout = async function() {
+            try {
+                await signOut(auth);
+                window.location.reload();
+            } catch (error) {
+                console.error('登出失敗:', error);
+            }
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async function () {
+            // 載入並顯示統計資訊
+            loadStats();
+
+            // 事件監聽
+            searchBtn.addEventListener('click', performSearch);
+            clearBtn.addEventListener('click', clearFilters);
+
+            nameSearch.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') performSearch();
+            });
+        });
+
+        // 載入統計資訊
+        async function loadStats() {
+            try {
+                const response = await fetch('/get_stats');
+                const data = await response.json();
+
+                if (data.error) {
+                    statsDisplay.textContent = '統計資訊載入失敗';
+                    return;
+                }
+
+                const totalText = `總計 ${(data.total_profiles || 0).toLocaleString()} 筆制裁資料`;
+                const yearText = `涵蓋 ${data.year_stats?.length || 0} 個年份 (${data.year_stats?.[data.year_stats.length - 1]?.year || ''}-${data.year_stats?.[0]?.year || ''})`;
+                statsDisplay.textContent = `${totalText} • ${yearText}`;
+
+            } catch (error) {
+                console.error('載入統計失敗:', error);
+                statsDisplay.textContent = '統計資訊載入失敗';
+            }
+        }
+
+        // 執行搜尋
+        async function performSearch() {
+            const name = nameSearch.value.trim();
+
+            // 檢查是否已登入
+            if (!currentUser) {
+                authRequired.style.display = 'block';
+                hideTable();
+                return;
+            }
+
+            searchResult.innerHTML = '';
+            authRequired.style.display = 'none';
+
+            // 判斷是否有查詢條件
+            if (name) {
+                // 查詢模式：顯示查詢結果在表格中
+                loadNameSearchResults(name, 1);
+            } else {
+                // 清空查詢，隱藏表格
+                hideTable();
+            }
+        }
+
+        // 載入姓名查詢結果（分頁）
+        async function loadNameSearchResults(name, page = 1) {
+            if (isLoading || !currentToken) return;
+
+            isLoading = true;
+            tableBody.innerHTML = '<tr><td colspan="6" class="loading">正在查詢...</td></tr>';
+
+            try {
+                const response = await fetch('/query_name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        name: name
+                    })
+                });
+
+                if (response.status === 401) {
+                    authRequired.style.display = 'block';
+                    hideTable();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (!data.results || data.results.length === 0) {
+                    showTableMessage('沒有找到相符的姓名資料', 'info');
+                    return;
+                }
+
+                // 設置當前查詢狀態
+                currentSearchName = name;
+                
+                // 模擬分頁（如果後端沒有實作分頁）
+                const perPage = 20;
+                const startIndex = (page - 1) * perPage;
+                const endIndex = startIndex + perPage;
+                const pageResults = data.results.slice(startIndex, endIndex);
+                
+                currentPage = page;
+                totalPages = Math.ceil(data.results.length / perPage);
+
+                // 渲染查詢結果
+                renderSearchResultTable(pageResults, page);
+                renderSearchPagination({
+                    page: page,
+                    total_pages: totalPages,
+                    has_prev: page > 1,
+                    has_next: page < totalPages,
+                    total: data.results.length
+                });
+                updateSearchPageInfo({
+                    page: page,
+                    total_pages: totalPages,
+                    total: data.results.length
+                }, name);
+
+                // 顯示表格相關元素
+                tableContainer.style.display = 'block';
+                statsBar.style.display = 'flex';
+                pagination.style.display = 'flex';
+
+            } catch (error) {
+                showTableMessage(`查詢失敗: ${error.message}`, 'error');
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // 清除過濾條件
+        function clearFilters() {
+            nameSearch.value = '';
+            searchResult.innerHTML = '';
+            currentSearchName = '';
+            authRequired.style.display = 'none';
+            hideTable();
+        }
+
+        // 隱藏表格和相關元素
+        function hideTable() {
+            tableContainer.style.display = 'none';
+            statsBar.style.display = 'none';
+            pagination.style.display = 'none';
+        }
+
+        // 渲染查詢結果表格
+        function renderSearchResultTable(profiles, page) {
+            if (profiles.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #666;">沒有找到符合條件的資料</td></tr>';
+                return;
+            }
+
+            const perPage = 20;
+            const startIndex = (page - 1) * perPage;
+            tableBody.innerHTML = profiles.map((profile, index) => `
+                <tr>
+                    <td>${startIndex + index + 1}</td>
+                    <td><strong>${escapeHtml(profile.name)}</strong></td>
+                    <td>${escapeHtml(profile.nationality)} ${profile.year ? `<span class="badge">${profile.year}</span>` : ''}</td>
+                    <td>${escapeHtml(profile.passport_no)}</td>
+                    <td>${profile.year || '-'}</td>
+                    <td>${profile.source_url ? `<a href="${escapeHtml(profile.source_url)}" target="_blank" style="color: #3182ce; text-decoration: none;">連結</a>` : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 渲染查詢結果分頁
+        function renderSearchPagination(data) {
+            if (data.total_pages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+
+            // 上一頁
+            html += `<button ${!data.has_prev ? 'disabled' : ''} onclick="changeSearchPage(${data.page - 1})">‹ 上一頁</button>`;
+
+            // 頁碼
+            const startPage = Math.max(1, data.page - 2);
+            const endPage = Math.min(data.total_pages, data.page + 2);
+
+            if (startPage > 1) {
+                html += `<button onclick="changeSearchPage(1)">1</button>`;
+                if (startPage > 2) html += `<span>...</span>`;
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button ${i === data.page ? 'class="active"' : ''} onclick="changeSearchPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < data.total_pages) {
+                if (endPage < data.total_pages - 1) html += `<span>...</span>`;
+                html += `<button onclick="changeSearchPage(${data.total_pages})">${data.total_pages}</button>`;
+            }
+
+            // 下一頁
+            html += `<button ${!data.has_next ? 'disabled' : ''} onclick="changeSearchPage(${data.page + 1})">下一頁 ›</button>`;
+
+            pagination.innerHTML = html;
+        }
+
+        // 更新查詢結果頁面資訊
+        function updateSearchPageInfo(data, searchName) {
+            pageInfo.textContent = `姓名查詢結果："${searchName}" • 第 ${data.page} 頁，共 ${data.total_pages} 頁 • 總計 ${data.total} 筆資料`;
+        }
+
+        // 切換查詢結果頁面
+        window.changeSearchPage = function(page) {
+            if (page === currentPage || isLoading) return;
+            if (currentSearchName) {
+                loadNameSearchResults(currentSearchName, page);
+            }
+        };
+
+        // 在表格中顯示訊息
+        function showTableMessage(message, type = 'info') {
+            pageInfo.textContent = message;
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem; color: ${type === 'error' ? '#c53030' : '#666'};">
+                        ${escapeHtml(message)}
+                    </td>
+                </tr>
+            `;
+            tableContainer.style.display = 'block';
+            statsBar.style.display = 'flex';
+            pagination.style.display = 'none';
+        }
+
+        // HTML 轉義
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

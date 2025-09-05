@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - HK Insurance AML 查詢系統</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo h1 {
+            color: #333;
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        .logo p {
+            color: #666;
+            margin: 0.5rem 0 0 0;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-bottom: 1rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e1e5e9;
+        }
+
+        .divider span {
+            background: white;
+            padding: 0 1rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .links {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .links a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 0.75rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🏦 HK Insurance</h1>
+            <p>AML 查詢系統</p>
+        </div>
+
+        <div id="alert-container"></div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>登入中...</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">電子郵件</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密碼</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="btn-primary" id="loginBtn">登入</button>
+        </form>
+
+        <div class="divider">
+            <span>或</span>
+        </div>
+
+        <div class="links">
+            <p>還沒有帳戶？ <a href="/register">立即註冊</a></p>
+            <p><a href="/">返回首頁</a></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Firebase 配置 (Emulator 模式)
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        const firebaseConfig = {
+            apiKey: "demo-key",
+            authDomain: "demo-project.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "demo-app-id"
+        };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // 連接到 Auth Emulator (如果在開發環境)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            connectAuthEmulator(auth, "http://127.0.0.1:9099");
+        }
+
+        // DOM 元素
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const loading = document.getElementById('loading');
+        const alertContainer = document.getElementById('alert-container');
+
+        // 顯示訊息
+        function showAlert(message, type = 'error') {
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type}">
+                    ${message}
+                </div>
+            `;
+        }
+
+        // 清除訊息
+        function clearAlert() {
+            alertContainer.innerHTML = '';
+        }
+
+        // 顯示載入狀態
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+            loginBtn.disabled = show;
+            loginBtn.textContent = show ? '登入中...' : '登入';
+        }
+
+        // 登入表單提交
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAlert();
+            showLoading(true);
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                // 使用 Firebase Auth 登入
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 獲取 ID Token
+                const idToken = await user.getIdToken();
+
+                // 儲存 token 到 localStorage (或 cookie)
+                localStorage.setItem('firebase_token', idToken);
+
+                showAlert('登入成功！正在跳轉...', 'success');
+                
+                // 跳轉到首頁
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+
+            } catch (error) {
+                console.error('登入錯誤:', error);
+                
+                let errorMessage = '登入失敗，請檢查您的帳號密碼';
+                
+                switch (error.code) {
+                    case 'auth/user-not-found':
+                        errorMessage = '找不到此用戶，請檢查電子郵件地址';
+                        break;
+                    case 'auth/wrong-password':
+                        errorMessage = '密碼錯誤，請重新輸入';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = '電子郵件格式不正確';
+                        break;
+                    case 'auth/user-disabled':
+                        errorMessage = '此帳戶已被停用';
+                        break;
+                    case 'auth/too-many-requests':
+                        errorMessage = '登入嘗試次數過多，請稍後再試';
+                        break;
+                }
+                
+                showAlert(errorMessage);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // 檢查是否已登入
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // 用戶已登入，可能要跳轉
+                console.log('用戶已登入:', user.email);
+            }
+        });
+    </script>
+</body>
+</html>

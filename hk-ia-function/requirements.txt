@@ -7,3 +7,4 @@ beautifulsoup4
 lxml
 sendgrid
 google-cloud-firestore==2.13.1
+firebase-admin==6.2.0
