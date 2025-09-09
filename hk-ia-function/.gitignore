@@ -1,1 +1,12 @@
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Firebase
+firebase-debug.log
 firestore-debug.log
+ui-debug.log
+firebase.json
+.firebaserc
