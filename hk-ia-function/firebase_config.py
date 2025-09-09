@@ -11,14 +11,8 @@ from flask import request, jsonify, current_app
 def initialize_firebase():
     """初始化 Firebase Admin SDK"""
     if not firebase_admin._apps:
-        # 使用 Emulator 模式或實際 Firebase 項目
-        if os.getenv('FIREBASE_AUTH_EMULATOR_HOST'):
-            # Emulator 模式 - 使用預設認證
-            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = ''  # 清空認證文件路徑
-            firebase_admin.initialize_app(options={'projectId': 'demo-project'})
-        else:
-            # 實際 Firebase 項目（需要 service account key）
-            firebase_admin.initialize_app()
+        # 使用正確的專案 ID
+        firebase_admin.initialize_app(options={'projectId': 'hk-insurance-crawler'})
     
     return firestore.client()
 

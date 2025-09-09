@@ -9,6 +9,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 import os
+import uuid
 
 class UserManager:
     def __init__(self, project_id=None, use_emulator=False):
@@ -31,6 +32,7 @@ class UserManager:
         self.SESSIONS_COLLECTION = "user_sessions"
         self.QUERY_LOGS_COLLECTION = "query_logs"
         self.PASSWORD_RESETS_COLLECTION = "password_resets"
+        self.EMAIL_VERIFICATIONS_COLLECTION = "email_verifications"
         
         print("✅ Firestore 用戶管理器初始化完成")
 
@@ -41,6 +43,104 @@ class UserManager:
     def generate_session_token(self):
         """生成會話token - 使用十六進制確保安全傳輸"""
         return secrets.token_hex(32)  # 生成 64 字符的十六進制字串
+
+    def generate_verification_token(self):
+        """生成驗證令牌"""
+        return str(uuid.uuid4())
+
+    def register_user_with_verification(self, email, password, membership_level="basic", is_admin=False):
+        """註冊新用戶（需要郵件驗證）"""
+        try:
+            # 檢查 email 是否已存在
+            users_ref = self.db.collection(self.USERS_COLLECTION)
+            existing_user = list(users_ref.where("email", "==", email).limit(1).stream())
+            
+            if existing_user:
+                return {"success": False, "message": "此 Email 已被註冊"}
+            
+            # 生成驗證令牌
+            verification_token = self.generate_verification_token()
+            
+            # 創建未驗證的用戶文件
+            user_data = {
+                "email": email,
+                "password_hash": self.hash_password(password),
+                "membership_level": membership_level,
+                "is_admin": is_admin,
+                "is_active": False,  # 未驗證時設為 False
+                "email_verified": False,
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "last_login": None,
+                # 設定新會員總查詢次數為 5 次（不是每日5次）
+                "total_queries_allowed": 5,
+                "queries_used": 0
+            }
+            
+            # 使用 Firestore 自動生成的 ID
+            doc_ref = users_ref.add(user_data)
+            user_id = doc_ref[1].id
+            
+            # 儲存驗證令牌
+            verification_data = {
+                "user_id": user_id,
+                "email": email,
+                "token": verification_token,
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "expires_at": datetime.now(timezone.utc) + timedelta(hours=24),
+                "used": False
+            }
+            
+            self.db.collection(self.EMAIL_VERIFICATIONS_COLLECTION).add(verification_data)
+            
+            return {
+                "success": True, 
+                "message": "註冊成功，請檢查郵件進行驗證", 
+                "user_id": user_id,
+                "verification_token": verification_token
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": f"註冊失敗: {str(e)}"}
+
+    def verify_email(self, token):
+        """驗證郵件地址"""
+        try:
+            # 查找驗證令牌
+            verifications_ref = self.db.collection(self.EMAIL_VERIFICATIONS_COLLECTION)
+            token_query = verifications_ref.where("token", "==", token).where("used", "==", False).limit(1)
+            tokens = list(token_query.stream())
+            
+            if not tokens:
+                return {"success": False, "message": "無效的驗證令牌"}
+            
+            token_doc = tokens[0]
+            token_data = token_doc.to_dict()
+            
+            # 檢查是否過期
+            if datetime.now(timezone.utc) > token_data["expires_at"]:
+                return {"success": False, "message": "驗證令牌已過期"}
+            
+            # 啟用用戶帳戶
+            user_id = token_data["user_id"]
+            users_ref = self.db.collection(self.USERS_COLLECTION)
+            user_doc_ref = users_ref.document(user_id)
+            
+            user_doc_ref.update({
+                "is_active": True,
+                "email_verified": True,
+                "verified_at": firestore.SERVER_TIMESTAMP
+            })
+            
+            # 標記令牌為已使用
+            token_doc.reference.update({
+                "used": True,
+                "used_at": firestore.SERVER_TIMESTAMP
+            })
+            
+            return {"success": True, "message": "郵件驗證成功，帳戶已啟用"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"驗證失敗: {str(e)}"}
 
     def register_user(self, email, password, membership_level="basic", is_admin=False):
         """註冊新用戶"""
@@ -176,8 +276,9 @@ class UserManager:
 
     # 以下是必要的方法，保持與原版本相同的 API
     def log_query(self, user_id, query_type, query_params=None):
-        """記錄查詢"""
+        """記錄查詢並增加計數"""
         try:
+            # 記錄查詢日誌
             query_data = {
                 "user_id": user_id,
                 "query_type": query_type,
@@ -185,12 +286,24 @@ class UserManager:
                 "query_time": firestore.SERVER_TIMESTAMP
             }
             self.db.collection(self.QUERY_LOGS_COLLECTION).add(query_data)
+            
+            # 增加用戶查詢計數（僅對基本會員）
+            user_ref = self.db.collection(self.USERS_COLLECTION).document(user_id)
+            user_doc = user_ref.get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                # 只有基本會員需要計數
+                if user_data.get("membership_level", "basic") == "basic" and not user_data.get("is_admin", False):
+                    current_count = user_data.get("queries_used", 0)
+                    user_ref.update({"queries_used": current_count + 1})
+            
             return {"success": True}
         except Exception as e:
             return {"success": False, "message": f"記錄查詢失敗: {str(e)}"}
 
     def check_query_limit(self, user_id):
-        """檢查查詢限制"""
+        """檢查查詢限制（改為總次數限制）"""
         try:
             user_ref = self.db.collection(self.USERS_COLLECTION).document(user_id)
             user_doc = user_ref.get()
@@ -201,23 +314,19 @@ class UserManager:
             user_data = user_doc.to_dict()
             membership_level = user_data.get("membership_level", "basic")
             
-            daily_limits = {"basic": 5, "premium": 100, "super": float("inf")}
-            daily_limit = daily_limits.get(membership_level, 5)
+            # 檢查是否是管理員或高級會員（無限制）
+            if user_data.get("is_admin", False) or membership_level in ["premium", "super"]:
+                return {"can_query": True, "limit": "無限制", "used": 0, "remaining": "無限制"}
             
-            if daily_limit == float("inf"):
-                return {"can_query": True, "daily_limit": "無限制", "today_count": 0, "remaining": "無限制"}
-            
-            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-            query_logs_ref = self.db.collection(self.QUERY_LOGS_COLLECTION)
-            today_queries = list(query_logs_ref.where("user_id", "==", user_id).where("query_time", ">=", today).stream())
-            
-            today_count = len(today_queries)
-            remaining = max(0, daily_limit - today_count)
+            # 基本會員：總共5次查詢
+            total_allowed = user_data.get("total_queries_allowed", 5)
+            queries_used = user_data.get("queries_used", 0)
+            remaining = max(0, total_allowed - queries_used)
             
             return {
-                "can_query": today_count < daily_limit,
-                "daily_limit": daily_limit,
-                "today_count": today_count,
+                "can_query": queries_used < total_allowed,
+                "limit": total_allowed,
+                "used": queries_used,
                 "remaining": remaining
             }
         except Exception as e:
@@ -255,3 +364,24 @@ class UserManager:
         except Exception as e:
             return {"success": False, "message": f"登出失敗: {str(e)}"}
 
+    def get_user_by_session(self, session_token):
+        """通過會話token獲取用戶資訊"""
+        try:
+            verification_result = self.verify_session(session_token)
+            if verification_result["valid"]:
+                user_data = verification_result["user"]
+                
+                # 獲取查詢限制資訊
+                limit_check = self.check_query_limit(user_data["id"])
+                if limit_check["can_query"]:
+                    user_data["queries_remaining"] = limit_check.get("remaining", 0)
+                    user_data["query_limit"] = limit_check.get("limit", 5)
+                else:
+                    user_data["queries_remaining"] = 0
+                    user_data["query_limit"] = 5
+                
+                return {"success": True, "user": user_data}
+            else:
+                return {"success": False, "message": verification_result["message"]}
+        except Exception as e:
+            return {"success": False, "message": f"獲取用戶資訊失敗: {str(e)}"}

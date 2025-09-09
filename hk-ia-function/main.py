@@ -76,11 +76,14 @@ def require_admin():
 
 @app.route("/")
 def home():
-    """主頁 - 直接顯示查詢頁面"""
+    """主頁 - 無快取，確保新用戶看到正確內容"""
     response = make_response(render_template("query.html"))
+    
+    # 🔥 添加強制無快取標頭
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
+    response.headers['Pragma'] = 'no-cache' 
     response.headers['Expires'] = '0'
+    
     return response
 
 @app.route("/register", methods=["GET", "POST"])
@@ -199,7 +202,31 @@ def profile():
 
 @app.route("/query", methods=["GET"])
 def query():
-    """AML 查詢功能 - 無需認證"""
+    """AML 查詢功能 - 檢查會員權限"""
+    # 檢查認證
+    auth_result = require_auth()
+    
+    if not auth_result.get('valid'):
+        # 如果未登入，返回需要登入的錯誤
+        return jsonify({
+            "error": "需要會員登入才能使用查詢功能",
+            "auth_required": True,
+            "message": auth_result.get('message', '請先登入')
+        }), 401
+    
+    # 檢查查詢限制
+    user = auth_result.get('user', {})
+    user_id = user.get('id')
+    
+    limit_check = user_manager.check_query_limit(user_id)
+    if not limit_check.get('can_query', False):
+        return jsonify({
+            "error": f"已達今日查詢限制 ({limit_check.get('daily_limit', 0)} 次)",
+            "limit_exceeded": True,
+            "today_count": limit_check.get('today_count', 0),
+            "daily_limit": limit_check.get('daily_limit', 0)
+        }), 429
+    
     # 正確處理 URL 編碼的參數
     try:
         name = request.args.get("name", '').strip()
@@ -223,9 +250,13 @@ def query():
         # 🔥 使用 Firestore AML 查詢引擎
         result = aml_query.search_by_name(name, page, per_page)
         
+        # 記錄查詢
+        user_manager.log_query(user_id, "name_search", {"name": name, "page": page})
+        
         # 確保響應使用正確的 Content-Type 和編碼
         response = make_response(jsonify(result))
         response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response, 200
             
     except Exception as e:

@@ -2,19 +2,23 @@
 基於 Firebase Authentication 的 HK Insurance AML 查詢系統
 完全重構版本 - 使用 Firebase Auth 進行身份驗證
 """
-from flask import Flask, request, jsonify, render_template, make_response
+from flask import Flask, request, jsonify, render_template, make_response, redirect, flash, url_for
 from takepdf import query_name, get_profiles_paginated, get_stats
 from firestore_aml_query import FirestoreAMLQuery
 from firebase_config import initialize_firebase, verify_firebase_token, verify_admin_role, get_user_role, set_user_role
+from user_management_firestore import UserManager
+from create_admin import create_admin_if_not_exists
+from sendgrid_service import sendgrid_service
 import os
 import json
 import logging
 
 app = Flask(__name__)
 
-# 設置 JSON 編碼，確保中文字符正確顯示
+# 設置 Flask 應用程式配置
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+app.secret_key = 'hk-insurance-aml-secret-key-2025'  # 設置 session secret key
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
@@ -29,10 +33,45 @@ USE_EMULATOR = os.environ.get('FIRESTORE_EMULATOR_HOST') is not None
 print(f"🚀 初始化 Firestore AML 查詢引擎 ({'模擬器模式' if USE_EMULATOR else 'GCP生產模式'})...")
 aml_query = FirestoreAMLQuery(use_emulator=USE_EMULATOR)
 
+# 🚀 初始化 Firestore 會員管理系統
+print(f"🚀 初始化 Firestore 會員管理系統 ({'模擬器模式' if USE_EMULATOR else 'GCP生產模式'})...")
+user_manager = UserManager(use_emulator=USE_EMULATOR)
+
+# 🔧 創建預設管理員帳戶
+create_admin_if_not_exists(user_manager)
+
+# 🔧 會話管理輔助函數
+def get_current_user():
+    """從 cookies 中獲取當前用戶資訊"""
+    try:
+        session_token = request.cookies.get('session_token')
+        if not session_token:
+            return None
+        
+        # 驗證會話token並獲取用戶資訊
+        user_info = user_manager.get_user_by_session(session_token)
+        if user_info and user_info['success']:
+            return user_info['user']
+        return None
+    except Exception as e:
+        logger.error(f"獲取用戶資訊錯誤: {str(e)}")
+        return None
+
+# 🔧 模板上下文處理器
+@app.context_processor
+def inject_user():
+    """將用戶資訊注入所有模板"""
+    try:
+        current_user = get_current_user()
+        return dict(current_user=current_user)
+    except Exception as e:
+        logger.error(f"inject_user 錯誤: {str(e)}")
+        return dict(current_user=None)
+
 @app.route("/")
-def home():
+def index():
     """主頁 - 無快取，確保新用戶看到正確內容"""
-    response = make_response(render_template("query.html"))
+    response = make_response(render_template("index.html"))
     
     # 🔥 添加強制無快取標頭
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -41,23 +80,218 @@ def home():
     
     return response
 
-@app.route("/login")
-def login_page():
+@app.route("/login", methods=["GET", "POST"])
+def login():
     """登入頁面"""
+    if request.method == "POST":
+        # 處理登入表單提交
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        if not email or not password:
+            response = make_response(render_template("login.html", error="請提供 email 和密碼"))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+        
+        # 使用 user_manager 進行登入驗證
+        result = user_manager.login_user(email, password)
+        
+        if result['success']:
+            # 登入成功，設置 session 並重導向到首頁
+            response = make_response(redirect('/'))
+            response.set_cookie('session_token', result['session_token'], httponly=True, secure=False)
+            response.set_cookie('user_email', result['user']['email'], httponly=True, secure=False)
+            return response
+        else:
+            # 登入失敗，顯示錯誤訊息
+            response = make_response(render_template("login.html", error=result['message']))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+    
+    # GET 請求，顯示登入頁面
     response = make_response(render_template("login.html"))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache' 
     response.headers['Expires'] = '0'
     return response
 
-@app.route("/register")
-def register_page():
+@app.route("/register", methods=["GET", "POST"])
+def register():
     """註冊頁面"""
+    if request.method == "POST":
+        # 處理註冊表單提交
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not email or not password:
+            response = make_response(render_template("register.html", error="請提供 email 和密碼"))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+        
+        if password != confirm_password:
+            response = make_response(render_template("register.html", error="密碼與確認密碼不符"))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+        
+        # 使用 user_manager 進行註冊（需要郵件驗證）
+        result = user_manager.register_user_with_verification(email, password)
+        
+        if result['success']:
+            # 發送驗證郵件
+            verification_token = result['verification_token']
+            email_result = sendgrid_service.send_verification_email(email, verification_token)
+            
+            if email_result['success']:
+                flash("註冊成功！驗證郵件已發送到您的信箱，請點擊郵件中的連結完成驗證。", "success")
+                response = make_response(render_template("login.html"))
+            else:
+                flash(f"註冊成功，但郵件發送失敗：{email_result['message']}", "warning")
+                response = make_response(render_template("login.html"))
+            
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+        else:
+            # 註冊失敗，顯示錯誤訊息
+            flash(result['message'], "error")
+            response = make_response(render_template("register.html"))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+            response = make_response(render_template("register.html", error=result['message']))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache' 
+            response.headers['Expires'] = '0'
+            return response
+    
+    # GET 請求，顯示註冊頁面
     response = make_response(render_template("register.html"))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache' 
     response.headers['Expires'] = '0'
     return response
+
+@app.route("/verify_email")
+def verify_email():
+    """郵件驗證頁面"""
+    token = request.args.get('token')
+    
+    if not token:
+        flash("無效的驗證連結", "error")
+        return redirect(url_for('login'))
+    
+    # 進行郵件驗證
+    result = user_manager.verify_email(token)
+    
+    if result['success']:
+        flash("郵件驗證成功！您的帳戶已啟用，現在可以登入了。", "success")
+    else:
+        flash(f"驗證失敗：{result['message']}", "error")
+    
+    return redirect(url_for('login'))
+
+@app.route("/forgot_password")
+def forgot_password():
+    """忘記密碼頁面"""
+    response = make_response(render_template("forgot_password.html"))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '0'
+    return response
+
+@app.route("/logout")
+def logout():
+    """登出頁面"""
+    session_token = request.cookies.get('session_token')
+    
+    if session_token:
+        # 使用 user_manager 登出
+        user_manager.logout_user(session_token)
+    
+    # 清除 cookies 並重定向到首頁
+    response = make_response(redirect('/'))
+    response.set_cookie('session_token', '', expires=0)
+    response.set_cookie('user_email', '', expires=0)
+    return response
+
+@app.route("/change_password")
+def change_password():
+    """修改密碼頁面"""
+    current_user = get_current_user()
+    if not current_user:
+        return redirect('/login')
+    
+    response = make_response(render_template("change_password.html"))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '0'
+    return response
+
+# ==================== 會員系統 API ====================
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """會員登入 API"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({"success": False, "message": "請提供 email 和密碼"})
+        
+        result = user_manager.login_user(email, password)
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"登入錯誤: {str(e)}")
+        return jsonify({"success": False, "message": "登入過程發生錯誤"})
+
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    """會員註冊 API"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({"success": False, "message": "請提供 email 和密碼"})
+        
+        result = user_manager.register_user(email, password)
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"註冊錯誤: {str(e)}")
+        return jsonify({"success": False, "message": "註冊過程發生錯誤"})
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    """會員登出 API"""
+    try:
+        data = request.get_json()
+        session_token = data.get('session_token')
+        
+        if session_token:
+            result = user_manager.logout_user(session_token)
+            return jsonify(result)
+        else:
+            return jsonify({"success": True, "message": "已登出"})
+        
+    except Exception as e:
+        logger.error(f"登出錯誤: {str(e)}")
+        return jsonify({"success": False, "message": "登出過程發生錯誤"})
 
 @app.route("/admin")
 @verify_firebase_token
@@ -206,31 +440,56 @@ def update_user_role(uid):
 # ==================== AML 查詢 API ====================
 
 @app.route("/query_name", methods=["POST"])
-@verify_firebase_token
 def query_name_api():
-    """AML 查詢 API - 需要身份驗證"""
+    """AML 查詢 API - 需要登入並檢查查詢限制"""
     try:
+        # 檢查用戶是否登入
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '請先登入'}), 401
+        
+        # 檢查查詢限制
+        limit_check = user_manager.check_query_limit(current_user['id'])
+        if not limit_check.get('can_query', False):
+            return jsonify({
+                'success': False, 
+                'message': f"查詢次數已用完。{limit_check.get('message', '')}"
+            }), 403
+        
         data = request.get_json()
         name_input = data.get('name', '').strip()
         
         if not name_input:
-            return jsonify({'error': '請輸入查詢名稱'}), 400
+            return jsonify({'success': False, 'message': '請輸入查詢名稱'}), 400
         
-        # 記錄查詢活動
-        uid = request.user.get('uid')
-        logger.info(f"用戶 {uid} 查詢: {name_input}")
+        logger.info(f"查詢: {name_input} (用戶: {current_user['email']})")
         
-        results = aml_query.query_name(name_input)
+        # 執行查詢
+        results = aml_query.search_by_name(name_input)
+        
+        # 記錄查詢並扣減次數
+        user_manager.log_query(current_user['id'], "name_search", name_input)
+        
+        # 獲取更新後的查詢限制
+        updated_limit = user_manager.check_query_limit(current_user['id'])
         
         return jsonify({
-            'query': name_input,
-            'results': results,
-            'total': len(results)
+            'success': True,
+            'found': results.get('found', False),
+            'matches': results.get('profiles', []),
+            'total': results.get('total', 0),
+            'page': results.get('page', 1),
+            'total_pages': results.get('total_pages', 0),
+            'query_info': {
+                'remaining': updated_limit.get('remaining', 0),
+                'used': updated_limit.get('used', 0),
+                'limit': updated_limit.get('limit', 5)
+            }
         })
         
     except Exception as e:
         logger.error(f"查詢失敗: {str(e)}")
-        return jsonify({'error': f'查詢失敗: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'查詢失敗: {str(e)}'}), 500
 
 @app.route("/get_profiles", methods=["GET"])
 @verify_firebase_token  
@@ -258,6 +517,31 @@ def get_stats_public():
     except Exception as e:
         logger.error(f"獲取統計失敗: {str(e)}")
         return jsonify({'error': f'獲取統計失敗: {str(e)}'}), 500
+
+@app.route("/api/user/query_limit", methods=["GET"])
+def get_user_query_limit():
+    """獲取用戶查詢限制信息"""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '請先登入'}), 401
+        
+        limit_check = user_manager.check_query_limit(current_user['id'])
+        
+        return jsonify({
+            'success': True,
+            'query_info': {
+                'can_query': limit_check.get('can_query', False),
+                'remaining': limit_check.get('remaining', 0),
+                'used': limit_check.get('used', 0),
+                'limit': limit_check.get('limit', 5),
+                'message': limit_check.get('message', '')
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"獲取查詢限制失敗: {str(e)}")
+        return jsonify({'success': False, 'message': f'獲取查詢限制失敗: {str(e)}'}), 500
 
 # ==================== 管理員功能 ====================
 
@@ -306,4 +590,4 @@ def internal_error(e):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     print(f"🚀 啟動 Firebase Auth AML 查詢系統於 http://127.0.0.1:{port}")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

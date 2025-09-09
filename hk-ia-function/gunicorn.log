@@ -1,0 +1,62 @@
+nohup: 忽略輸入
+[2025-09-06 00:50:01 +0800] [427412] [INFO] Starting gunicorn 23.0.0
+[2025-09-06 00:50:01 +0800] [427412] [INFO] Listening at: http://0.0.0.0:8000 (427412)
+[2025-09-06 00:50:01 +0800] [427412] [INFO] Using worker: sync
+[2025-09-06 00:50:01 +0800] [427417] [INFO] Booting worker with pid: 427417
+/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/google/cloud/firestore_v1/base_collection.py:295: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+INFO:main_firebase:查詢: ali (用戶: schhs334@chhsban.edu.my)
+INFO:main_firebase:查詢: ALI (用戶: schhs334@chhsban.edu.my)
+INFO:main_firebase:查詢: moha (用戶: astcws@gmail.com)
+[2025-09-06 00:56:36 +0800] [427412] [CRITICAL] WORKER TIMEOUT (pid:427417)
+[2025-09-06 00:56:36 +0800] [427417] [ERROR] Error handling request (no URI read)
+Traceback (most recent call last):
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/workers/sync.py", line 133, in handle
+    req = next(parser)
+          ^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/parser.py", line 41, in __next__
+    self.mesg = self.mesg_class(self.cfg, self.unreader, self.source_addr, self.req_count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/message.py", line 259, in __init__
+    super().__init__(cfg, unreader, peer_addr)
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/message.py", line 60, in __init__
+    unused = self.parse(self.unreader)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/message.py", line 271, in parse
+    self.get_data(unreader, buf, stop=True)
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/message.py", line 262, in get_data
+    data = unreader.read()
+           ^^^^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/unreader.py", line 36, in read
+    d = self.chunk()
+        ^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/http/unreader.py", line 63, in chunk
+    return self.sock.recv(self.mxchunk)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/gunicorn/workers/base.py", line 204, in handle_abort
+    sys.exit(1)
+SystemExit: 1
+[2025-09-06 00:56:36 +0800] [427417] [INFO] Worker exiting (pid: 427417)
+SendGrid 初始化成功，發件人: astcws@gmail.com
+🚀 初始化 Firebase Authentication...
+🚀 初始化 Firestore AML 查詢引擎 (模擬器模式)...
+🚀 初始化 Firestore 會員管理系統 (模擬器模式)...
+🔄 初始化 Firestore 用戶管理器 (模擬器模式)，專案: hk-insurance-crawler
+✅ Firestore 用戶管理器初始化完成
+🔍 檢查管理員帳戶: astcws@gmail.com
+ℹ️ 註冊結果: 此 Email 已被註冊
+✅ 管理員帳戶已存在且可正常登入
+[2025-09-06 00:56:36 +0800] [428312] [INFO] Booting worker with pid: 428312
+/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/google/cloud/firestore_v1/base_collection.py:295: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+INFO:main_firebase:查詢: ALI (用戶: astcws@hotmail.com)
+INFO:main_firebase:查詢: ALI (用戶: astcws@gmail.com)
+INFO:main_firebase:查詢: su (用戶: schhs334@chhsban.edu.my)
+[2025-09-06 00:59:33 +0800] [427412] [INFO] Handling signal: hup
+[2025-09-06 00:59:33 +0800] [427412] [INFO] Hang up: Master
+[2025-09-06 00:59:33 +0800] [429013] [INFO] Booting worker with pid: 429013
+[2025-09-06 00:59:33 +0800] [427412] [ERROR] Worker (pid:428312) was sent SIGHUP!
+[2025-09-06 00:59:33 +0800] [427412] [INFO] Handling signal: term
+WARNING:google.auth._default:No project ID could be determined. Consider running `gcloud config set project` or setting the GOOGLE_CLOUD_PROJECT environment variable
+/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/google/cloud/firestore_v1/base_collection.py:295: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}會員登入 - AML 查詢系統{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card">
+                <div class="card-header text-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-sign-in-alt me-2"></i>會員登入
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope me-2"></i>Email 地址
+                            </label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="請輸入您的 Email"
+                                required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                <i class="fas fa-lock me-2"></i>密碼
+                            </label>
+                            <input type="password" class="form-control" id="password" name="password"
+                                placeholder="請輸入密碼" required>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="remember">
+                            <label class="form-check-label" for="remember">
+                                記住我
+                            </label>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-sign-in-alt me-2"></i>登入
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <div class="row">
+                            <div class="col">
+                                <a href="#" class="text-decoration-none">
+                                    <i class="fas fa-key me-1"></i>忘記密碼？
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-center bg-light">
+                    <p class="mb-0">
+                        還沒有帳號？
+                        <a href="{{ url_for('register') }}" class="text-decoration-none">
+                            <i class="fas fa-user-plus me-1"></i>立即註冊
+                        </a>
+                    </p>
+                </div>
+            </div>
+
+            <!-- 測試帳號提示 -->
+            <div class="card mt-4 border-info">
+                <div class="card-header bg-info text-white text-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>測試帳號
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12 mb-2">
+                            <strong>管理員帳號：</strong>
+                            <br>
+                            <code>astcws@hotmail</code> / <code>admin123</code>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <i class="fas fa-lightbulb me-1"></i>
+                        您可以使用此帳號測試管理員功能
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // 自動填入測試帳號（僅供開發測試）
+        $('#email').on('focus', function () {
+            if ($(this).val() === '') {
+                $(this).val('astcws@hotmail');
+                $('#password').val('admin123');
+            }
+        });
+
+        // 表單驗證
+        $('form').on('submit', function (e) {
+            const email = $('#email').val().trim();
+            const password = $('#password').val();
+
+            if (!email || !password) {
+                e.preventDefault();
+                alert('請填寫所有必填欄位');
+                return false;
+            }
+
+            // Email 格式驗證
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                e.preventDefault();
+                alert('請輸入有效的 Email 地址');
+                return false;
+            }
+        });
+    });
+</script>
+{% endblock %}

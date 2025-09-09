@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}AML 制裁名單查詢系統{% endblock %}
+
+{% block head %}
+<style>
+    h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 30px;
+    }
+
+    .search-box {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        justify-content: center;
+    }
+
+    #nameInput {
+        padding: 12px;
+        font-size: 16px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        width: 300px;
+    }
+
+    #searchBtn {
+        padding: 12px 20px;
+        font-size: 16px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    #searchBtn:hover {
+        background: #5a6fd8;
+    }
+
+    #searchBtn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .results {
+        margin-top: 20px;
+    }
+
+    .no-results {
+        text-align: center;
+        color: #666;
+        padding: 40px;
+    }
+
+    .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background: white;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .results-table th {
+        background: #667eea;
+        color: white;
+        padding: 12px 8px;
+        text-align: left;
+        font-weight: bold;
+        border-bottom: 2px solid #5a6fd8;
+    }
+
+    .results-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #ddd;
+        vertical-align: top;
+    }
+
+    .results-table tr:nth-child(even) {
+        background: #f8f9fa;
+    }
+
+    .results-table tr:hover {
+        background: #e8f0fe;
+    }
+
+    .results-table a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .results-table a:hover {
+        color: #5a6fd8;
+        text-decoration: underline;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20px;
+        gap: 10px;
+    }
+
+    .pagination button {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    .pagination button:hover {
+        background: #f0f0f0;
+    }
+
+    .pagination button:disabled {
+        background: #f5f5f5;
+        cursor: not-allowed;
+        color: #999;
+    }
+
+    .pagination .current-page {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .page-info {
+        margin: 0 15px;
+        color: #666;
+    }
+
+    .data-source {
+        text-align: right;
+        font-style: italic;
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 20px;
+    }
+
+    .statistics {
+        text-align: left;
+        font-style: italic;
+        font-size: 12px;
+        color: #666;
+        margin-top: 15px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        line-height: 1.5;
+    }
+
+    .loading {
+        text-align: center;
+        color: #666;
+        padding: 20px;
+    }
+
+    .error {
+        background: #ffebee;
+        color: #c62828;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+
+    .stats {
+        text-align: center;
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    /* 模態框樣式 */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 10% auto;
+        padding: 30px;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 500px;
+        position: relative;
+    }
+
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        position: absolute;
+        right: 15px;
+        top: 10px;
+    }
+
+    .close:hover {
+        color: black;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+    }
+
+    .form-group button {
+        width: 100%;
+        padding: 12px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .form-group button:hover {
+        background: #5a6fd8;
+    }
+
+    .alert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="data-source">資料來源：香港保險業監管局</div>
+
+    <div class="search-box">
+        <input type="text" id="nameInput" placeholder="請輸入姓名..." />
+        <button id="searchBtn" onclick="searchName()">查詢</button>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <!-- 統計資訊區域 -->
+    <div id="statisticsContainer">
+        <div class="statistics">載入統計中...</div>
+    </div>
+</div>
+
+<!-- 修改密碼模態框 -->
+<div id="changePasswordModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('changePasswordModal')">&times;</span>
+        <h2>修改密碼</h2>
+        <form id="changePasswordForm">
+            <div class="form-group">
+                <label for="currentPassword">目前密碼:</label>
+                <input type="password" id="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label for="newPassword">新密碼:</label>
+                <input type="password" id="newPassword" required>
+            </div>
+            <div class="form-group">
+                <label for="confirmNewPassword">確認新密碼:</label>
+                <input type="password" id="confirmNewPassword" required>
+            </div>
+            <div class="form-group">
+                <button type="submit">更新密碼</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    let isSearching = false;
+    let allResults = [];
+    let currentPage = 1;
+    const itemsPerPage = 20;
+
+    // 頁面載入時獲取統計資訊
+    document.addEventListener('DOMContentLoaded', function () {
+        loadStatisticsForTable();
+    });
+
+    // 檢查查詢限制
+    async function checkQueryLimit() {
+        try {
+            const response = await fetch('/api/user/query_limit');
+            const data = await response.json();
+
+            if (data.success) {
+                const queryInfo = data.query_info;
+                const searchBtn = document.getElementById('searchBtn');
+
+                if (!queryInfo.can_query) {
+                    searchBtn.disabled = true;
+                    searchBtn.textContent = '查詢次數已用完';
+                    searchBtn.style.backgroundColor = '#6c757d';
+                    searchBtn.style.cursor = 'not-allowed';
+                    return false;
+                } else {
+                    searchBtn.disabled = false;
+                    searchBtn.textContent = '查詢';
+                    searchBtn.style.backgroundColor = '';
+                    searchBtn.style.cursor = 'pointer';
+                }
+
+                // 更新剩餘次數顯示
+                updateQueryCountDisplay(queryInfo);
+                return true;
+            }
+        } catch (error) {
+            console.error('檢查查詢限制失敗:', error);
+        }
+        return true; // 出錯時允許查詢
+    }
+
+    // 更新查詢次數顯示
+    function updateQueryCountDisplay(queryInfo) {
+        // 這個函數會更新導航欄中的查詢次數顯示
+        // 可以通過重新載入頁面或使用 JavaScript 更新
+        if (queryInfo.remaining !== undefined) {
+            const badges = document.querySelectorAll('.badge');
+            badges.forEach(badge => {
+                if (badge.textContent.includes('還可查詢')) {
+                    badge.textContent = `還可查詢${queryInfo.remaining}次`;
+                }
+            });
+        }
+    }
+
+    // 按 Enter 也可以搜尋
+    document.getElementById('nameInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            searchName();
+        }
+    });
+
+    async function searchName() {
+        if (isSearching) return;
+
+        // 檢查查詢限制
+        const canQuery = await checkQueryLimit();
+        if (!canQuery) {
+            alert('查詢次數已用完，無法進行查詢');
+            return;
+        }
+
+        const nameInput = document.getElementById('nameInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsDiv = document.getElementById('results');
+
+        const name = nameInput.value.trim();
+
+        if (!name) {
+            alert('請輸入姓名');
+            return;
+        }
+
+        isSearching = true;
+        searchBtn.disabled = true;
+        searchBtn.textContent = '查詢中...';
+        resultsDiv.innerHTML = '<div class="loading">🔍 查詢中...</div>';
+
+        try {
+            const response = await fetch('/query_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: name })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                allResults = data.matches;
+                currentPage = 1;
+                displayResults(data);
+
+                // 更新查詢次數信息
+                if (data.query_info) {
+                    updateQueryCountDisplay(data.query_info);
+
+                    // 如果查詢次數用完，禁用按鈕
+                    if (!data.query_info.can_query || data.query_info.remaining <= 0) {
+                        setTimeout(() => {
+                            const btn = document.getElementById('searchBtn');
+                            btn.disabled = true;
+                            btn.textContent = '查詢次數已用完';
+                            btn.style.backgroundColor = '#6c757d';
+                        }, 100);
+                    }
+                }
+            } else {
+                resultsDiv.innerHTML = `<div class="error">查詢失敗: ${data.message}</div>`;
+            }
+        } catch (error) {
+            resultsDiv.innerHTML = `<div class="error">網路錯誤: ${error.message}</div>`;
+        } finally {
+            isSearching = false;
+            searchBtn.disabled = false;
+            searchBtn.textContent = '查詢';
+        }
+    }
+
+    function displayResults(data) {
+        const resultsDiv = document.getElementById('results');
+
+        if (!data.found || data.matches.length === 0) {
+            resultsDiv.innerHTML = '<div class="no-results">🔍 未找到相關記錄</div>';
+            return;
+        }
+
+        const totalPages = Math.ceil(allResults.length / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const currentResults = allResults.slice(startIndex, endIndex);
+
+        let html = `<div class="stats">找到 ${data.total} 筆相關記錄</div>`;
+
+        html += `
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th style="width: 25%">姓名</th>
+                        <th style="width: 15%">國籍</th>
+                        <th style="width: 20%">護照號碼</th>
+                        <th style="width: 10%">年份</th>
+                        <th style="width: 30%">連結</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        currentResults.forEach(match => {
+            const sourceUrl = match.source || '';
+            const linkDisplay = sourceUrl ?
+                `<a href="${escapeHtml(sourceUrl)}" target="_blank" style="color: #667eea; text-decoration: none;">🔗 查看來源</a>` :
+                '無連結';
+
+            html += `
+                <tr>
+                    <td><strong>${escapeHtml(match.name)}</strong></td>
+                    <td>${escapeHtml(match.nationality)}</td>
+                    <td>${escapeHtml(match.passport_no)}</td>
+                    <td>${escapeHtml(match.year)}</td>
+                    <td>${linkDisplay}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                </tbody>
+            </table>
+        `;
+
+        // 添加分頁控制
+        if (totalPages > 1) {
+            html += `
+                <div class="pagination">
+                    <button onclick="changePage(1)" ${currentPage === 1 ? 'disabled' : ''}>首頁</button>
+                    <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一頁</button>
+                    <span class="page-info">第 ${currentPage} 頁，共 ${totalPages} 頁</span>
+                    <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一頁</button>
+                    <button onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末頁</button>
+                </div>
+            `;
+        }
+
+        resultsDiv.innerHTML = html;
+    }
+
+    function changePage(page) {
+        const totalPages = Math.ceil(allResults.length / itemsPerPage);
+        if (page < 1 || page > totalPages) return;
+
+        currentPage = page;
+        displayResults({
+            success: true,
+            found: true,
+            matches: allResults,
+            total: allResults.length
+        });
+    }
+
+    async function loadStatisticsForTable() {
+        try {
+            const response = await fetch('/get_stats');
+            const data = await response.json();
+
+            if (data.success) {
+                displayStatisticsInTable(data);
+            } else {
+                document.getElementById('statisticsContainer').innerHTML = '<div class="statistics">統計載入失敗</div>';
+            }
+        } catch (error) {
+            document.getElementById('statisticsContainer').innerHTML = '<div class="statistics">統計載入錯誤</div>';
+        }
+    }
+
+    function displayStatisticsInTable(data) {
+        const statsContainer = document.getElementById('statisticsContainer');
+
+        // 計算年份統計
+        const yearCounts = data.year_stats;
+        const sortedYears = Object.keys(yearCounts)
+            .filter(year => !isNaN(year) && year !== '未知')
+            .sort((a, b) => parseInt(a) - parseInt(b));
+
+        const nonNumericYears = Object.keys(yearCounts)
+            .filter(year => isNaN(year) || year === '未知');
+
+        let statsHtml = `
+            <div class="statistics">
+                總計：${data.total} 筆資料<br>
+        `;
+
+        sortedYears.forEach(year => {
+            statsHtml += `${year}年：${yearCounts[year]}筆<br>`;
+        });
+
+        nonNumericYears.forEach(year => {
+            statsHtml += `${year}：${yearCounts[year]}筆<br>`;
+        });
+
+        statsHtml += '</div>';
+        statsContainer.innerHTML = statsHtml;
+    }
+
+    function escapeHtml(text) {
+        // 確保 text 是字符串，處理 null、undefined 和其他類型
+        if (text == null || text === undefined) {
+            return '';
+        }
+        // 將非字符串轉換為字符串
+        text = String(text);
+
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+    }
+
+    // 模態框相關函數
+    function showLoginModal() {
+        window.location.href = '/login';
+    }
+
+    function showRegisterModal() {
+        window.location.href = '/register';
+    }
+
+    function showChangePasswordModal() {
+        document.getElementById('changePasswordModal').style.display = 'block';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    // 點擊模態框外部關閉
+    window.onclick = function (event) {
+        const modal = document.getElementById('changePasswordModal');
+        if (event.target === modal) {
+            closeModal('changePasswordModal');
+        }
+    }
+
+    // 頁面載入時初始化
+    document.addEventListener('DOMContentLoaded', function () {
+        // 載入統計資訊
+        loadStatisticsForTable();
+    });
+</script>
+{% endblock %}

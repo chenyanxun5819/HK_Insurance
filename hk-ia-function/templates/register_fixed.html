@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}註冊新帳戶 - AML 查詢系統{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <!-- 標題區域 -->
+            <div class="text-center mb-4">
+                <h1 class="h3 mb-3">
+                    <i class="fas fa-user-plus me-2"></i>註冊新帳戶
+                </h1>
+                <p class="text-muted">加入 AML 查詢系統，開始您的專業查詢</p>
+            </div>
+
+            <!-- 註冊表單 -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-list me-2"></i>帳戶資訊
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- 顯示錯誤訊息 -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div
+                        class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="{{ url_for('register') }}">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope me-1"></i>Email 地址 *
+                            </label>
+                            <input type="email" class="form-control" id="email" name="email" required
+                                placeholder="請輸入有效的 Email 地址">
+                            <div class="form-text">
+                                這將是您的登入帳號，請確保填寫正確
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                <i class="fas fa-lock me-1"></i>密碼 *
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" required
+                                    placeholder="請設定登入密碼">
+                                <button class="btn btn-outline-secondary" type="button"
+                                    onclick="togglePassword('password')">
+                                    <i class="fas fa-eye" id="passwordIcon"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">
+                                密碼至少 6 個字符，建議包含字母和數字
+                            </div>
+                            <div class="mt-2">
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar" id="passwordStrength" role="progressbar"
+                                        style="width: 0%"></div>
+                                </div>
+                                <small id="strengthText" class="text-muted">密碼強度：</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="confirm_password" class="form-label">
+                                <i class="fas fa-check-double me-1"></i>確認密碼 *
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="confirm_password"
+                                    name="confirm_password" required placeholder="請再次輸入密碼">
+                                <button class="btn btn-outline-secondary" type="button"
+                                    onclick="togglePassword('confirm_password')">
+                                    <i class="fas fa-eye" id="confirmPasswordIcon"></i>
+                                </button>
+                            </div>
+                            <div id="confirmPasswordFeedback" class="form-text"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="agree" name="agree" required>
+                                <label class="form-check-label" for="agree">
+                                    我同意並接受 <a href="#" class="text-decoration-none">服務條款</a> 和
+                                    <a href="#" class="text-decoration-none">隱私政策</a>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-user-plus me-2"></i>註冊帳戶
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 會員等級說明 -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-star me-2"></i>會員等級說明
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-success me-2">
+                                    <i class="fas fa-user"></i>
+                                </span>
+                                <strong>初級會員</strong>
+                            </div>
+                            <ul class="list-unstyled ms-4">
+                                <li>• 每日 5 次查詢</li>
+                                <li>• 基本查詢功能</li>
+                                <li>• 免費註冊</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-primary me-2">
+                                    <i class="fas fa-star"></i>
+                                </span>
+                                <strong>付費會員</strong>
+                            </div>
+                            <ul class="list-unstyled ms-4">
+                                <li>• 每日 50 次查詢</li>
+                                <li>• 進階查詢功能</li>
+                                <li>• 查詢歷史記錄</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他選項 -->
+            <div class="text-center mt-3">
+                <p class="mb-0">
+                    已經有帳戶？
+                    <a href="{{ url_for('login') }}" class="text-decoration-none">
+                        <i class="fas fa-sign-in-alt me-1"></i>立即登入
+                    </a>
+                </p>
+                <p class="mt-2">
+                    <a href="{{ url_for('index') }}" class="text-decoration-none">
+                        <i class="fas fa-arrow-left me-1"></i>返回首頁
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // 密碼強度檢測
+        $('#password').on('input', function () {
+            checkPasswordStrength($(this).val());
+            checkPasswordMatch();
+        });
+
+        // 確認密碼匹配檢測
+        $('#confirm_password').on('input', function () {
+            checkPasswordMatch();
+        });
+    });
+
+    function togglePassword(fieldId) {
+        const field = document.getElementById(fieldId);
+        const icon = document.getElementById(fieldId + 'Icon');
+
+        if (field.type === 'password') {
+            field.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            field.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+
+    function checkPasswordStrength(password) {
+        let strength = 0;
+        let strengthText = '';
+        let strengthClass = '';
+
+        if (password.length >= 6) strength += 1;
+        if (/[a-z]/.test(password)) strength += 1;
+        if (/[A-Z]/.test(password)) strength += 1;
+        if (/[0-9]/.test(password)) strength += 1;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+
+        const percentage = (strength / 5) * 100;
+
+        if (strength <= 1) {
+            strengthText = '很弱';
+            strengthClass = 'bg-danger';
+        } else if (strength <= 2) {
+            strengthText = '弱';
+            strengthClass = 'bg-warning';
+        } else if (strength <= 3) {
+            strengthText = '中等';
+            strengthClass = 'bg-info';
+        } else if (strength <= 4) {
+            strengthText = '強';
+            strengthClass = 'bg-success';
+        } else {
+            strengthText = '很強';
+            strengthClass = 'bg-success';
+        }
+
+        $('#passwordStrength')
+            .removeClass('bg-danger bg-warning bg-info bg-success')
+            .addClass(strengthClass)
+            .css('width', percentage + '%');
+
+        $('#strengthText').text('密碼強度：' + strengthText);
+    }
+
+    function checkPasswordMatch() {
+        const password = $('#password').val();
+        const confirmPassword = $('#confirm_password').val();
+        const feedback = $('#confirmPasswordFeedback');
+
+        if (confirmPassword.length > 0) {
+            if (password === confirmPassword) {
+                feedback.removeClass('text-danger').addClass('text-success')
+                    .html('<i class="fas fa-check me-1"></i>密碼匹配');
+            } else {
+                feedback.removeClass('text-success').addClass('text-danger')
+                    .html('<i class="fas fa-times me-1"></i>密碼不匹配');
+            }
+        } else {
+            feedback.removeClass('text-success text-danger').text('');
+        }
+    }
+</script>
+{% endblock %}

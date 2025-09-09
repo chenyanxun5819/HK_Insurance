@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🔥 兼容自定義認證系統的安全規則
+    
+    // 會員資料集合
+    match /users/{userId} {
+      // 允許讀取和寫入 - 由應用層控制權限
+      allow read, write: if true;
+    }
+
+    // 會員會話集合
+    match /user_sessions/{sessionId} {
+      // 允許讀取和寫入 - 由應用層控制權限
+      allow read, write: if true;
+    }
+
+    // 查詢紀錄集合
+    match /query_logs/{logId} {
+      // 允許讀取和寫入 - 由應用層控制權限
+      allow read, write: if true;
+    }
+
+    // 密碼重設集合
+    match /password_resets/{resetId} {
+      // 允許讀取和寫入 - 由應用層控制權限
+      allow read, write: if true;
+    }
+
+    // AML 制裁名單資料（只讀）
+    match /aml_profiles/{profileId} {
+      // 允許讀取
+      allow read: if true;
+      // 只允許管理員寫入（由應用層控制）
+      allow write: if true;
+    }
+
+    // AML 統計資料（只讀）
+    match /aml_stats/{statId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // 其他集合預設拒絕
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

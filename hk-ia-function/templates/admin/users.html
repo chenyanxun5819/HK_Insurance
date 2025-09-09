@@ -1,0 +1,630 @@
+{% extends "base.html" %}
+
+{% block title %}用戶管理 - 管理員後台{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- 標題區域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-users me-2"></i>用戶管理
+                    </h1>
+                    <p class="text-muted">管理系統所有註冊用戶</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-arrow-left me-1"></i>返回後台
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                        <i class="fas fa-user-plus me-1"></i>新增用戶
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 篩選器 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form id="filterForm" class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">搜尋 Email</label>
+                            <input type="text" class="form-control" id="searchEmail" placeholder="輸入 Email 搜尋">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">會員等級</label>
+                            <select class="form-select" id="filterRole">
+                                <option value="">全部</option>
+                                <option value="basic">初級會員</option>
+                                <option value="paid">付費會員</option>
+                                <option value="admin">管理員</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">驗證狀態</label>
+                            <select class="form-select" id="filterVerified">
+                                <option value="">全部</option>
+                                <option value="1">已驗證</option>
+                                <option value="0">未驗證</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">註冊日期</label>
+                            <input type="date" class="form-control" id="filterDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i>篩選
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用戶列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>用戶列表
+                        <span class="badge bg-primary ms-2" id="userCount">{{ users|length }}</span>
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-success" onclick="exportUsers()">
+                            <i class="fas fa-download me-1"></i>匯出
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="refreshUserList()">
+                            <i class="fas fa-sync me-1"></i>重新整理
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="usersTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="50">
+                                        <input type="checkbox" id="selectAll" class="form-check-input">
+                                    </th>
+                                    <th>Email</th>
+                                    <th>會員等級</th>
+                                    <th>查詢限制</th>
+                                    <th>已使用</th>
+                                    <th>驗證狀態</th>
+                                    <th>註冊時間</th>
+                                    <th>最後登入</th>
+                                    <th width="120">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                {% for user in users %}
+                                <tr data-user-id="{{ user.id }}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input user-checkbox"
+                                            value="{{ user.id }}">
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-user-circle text-muted me-2"></i>
+                                            <strong>{{ user.email }}</strong>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if user.role == 'admin' %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-crown me-1"></i>管理員
+                                        </span>
+                                        {% elif user.role == 'paid' %}
+                                        <span class="badge bg-primary">
+                                            <i class="fas fa-star me-1"></i>付費會員
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-user me-1"></i>初級會員
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if user.query_limit == -1 %}
+                                        <span class="text-success">無限制</span>
+                                        {% else %}
+                                        {{ user.query_limit }}/日
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ user.queries_used }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if user.email_verified %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>已驗證
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-clock me-1"></i>未驗證
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ user.created_at[:10] }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if user.last_login_at %}
+                                            {{ user.last_login_at[:10] }}
+                                            {% else %}
+                                            從未登入
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                onclick="editUser({{ user.id }})" title="編輯">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-info"
+                                                onclick="viewUserLogs({{ user.id }})" title="查看記錄">
+                                                <i class="fas fa-history"></i>
+                                            </button>
+                                            {% if user.role != 'admin' %}
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                onclick="deleteUser({{ user.id }})" title="刪除">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 批次操作 -->
+                <div class="card-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted">已選擇 <span id="selectedCount">0</span> 個用戶</span>
+                        </div>
+                        <div id="batchActions" style="display: none;">
+                            <button class="btn btn-sm btn-outline-primary" onclick="batchUpdateRole()">
+                                <i class="fas fa-users-cog me-1"></i>批次更新等級
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" onclick="batchVerifyEmail()">
+                                <i class="fas fa-envelope-check me-1"></i>批次驗證 Email
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="batchDeleteUsers()">
+                                <i class="fas fa-trash me-1"></i>批次刪除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增用戶 Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新增用戶</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="newUserEmail" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">密碼 *</label>
+                        <input type="password" class="form-control" id="newUserPassword" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">會員等級</label>
+                        <select class="form-select" id="newUserRole">
+                            <option value="basic">初級會員</option>
+                            <option value="paid">付費會員</option>
+                            <option value="admin">管理員</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">查詢限制 (每日)</label>
+                        <input type="number" class="form-control" id="newUserQueryLimit" value="5"
+                            placeholder="-1 表示無限制">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="newUserVerified" checked>
+                            <label class="form-check-label">Email 已驗證</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addUser()">新增用戶</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 編輯用戶 Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">編輯用戶</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editUserEmail" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">會員等級</label>
+                        <select class="form-select" id="editUserRole">
+                            <option value="basic">初級會員</option>
+                            <option value="paid">付費會員</option>
+                            <option value="admin">管理員</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">查詢限制 (每日)</label>
+                        <input type="number" class="form-control" id="editUserQueryLimit" placeholder="-1 表示無限制">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="editUserVerified">
+                            <label class="form-check-label">Email 已驗證</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">重設查詢次數</label>
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="resetUserQueries()">
+                            <i class="fas fa-redo me-1"></i>重設為 0
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveUserChanges()">儲存變更</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let selectedUsers = [];
+
+    $(document).ready(function () {
+        // 全選/取消全選
+        $('#selectAll').on('change', function () {
+            const isChecked = $(this).is(':checked');
+            $('.user-checkbox').prop('checked', isChecked);
+            updateSelectedUsers();
+        });
+
+        // 單個選擇
+        $('.user-checkbox').on('change', function () {
+            updateSelectedUsers();
+        });
+
+        // 篩選表單
+        $('#filterForm').on('submit', function (e) {
+            e.preventDefault();
+            filterUsers();
+        });
+    });
+
+    function updateSelectedUsers() {
+        selectedUsers = [];
+        $('.user-checkbox:checked').each(function () {
+            selectedUsers.push($(this).val());
+        });
+
+        $('#selectedCount').text(selectedUsers.length);
+
+        if (selectedUsers.length > 0) {
+            $('#batchActions').show();
+        } else {
+            $('#batchActions').hide();
+        }
+    }
+
+    function filterUsers() {
+        const email = $('#searchEmail').val();
+        const role = $('#filterRole').val();
+        const verified = $('#filterVerified').val();
+        const date = $('#filterDate').val();
+
+        // 執行篩選邏輯
+        $('#usersTableBody tr').each(function () {
+            let show = true;
+            const row = $(this);
+
+            if (email && !row.find('td:nth-child(2)').text().toLowerCase().includes(email.toLowerCase())) {
+                show = false;
+            }
+
+            if (role && !row.find('td:nth-child(3)').text().includes(role)) {
+                show = false;
+            }
+
+            if (verified !== '' &&
+                ((verified === '1' && !row.find('td:nth-child(6)').text().includes('已驗證')) ||
+                    (verified === '0' && row.find('td:nth-child(6)').text().includes('已驗證')))) {
+                show = false;
+            }
+
+            if (date && !row.find('td:nth-child(7)').text().includes(date)) {
+                show = false;
+            }
+
+            row.toggle(show);
+        });
+
+        // 更新計數
+        const visibleRows = $('#usersTableBody tr:visible').length;
+        $('#userCount').text(visibleRows);
+    }
+
+    function addUser() {
+        const userData = {
+            email: $('#newUserEmail').val(),
+            password: $('#newUserPassword').val(),
+            role: $('#newUserRole').val(),
+            query_limit: parseInt($('#newUserQueryLimit').val()) || 5,
+            email_verified: $('#newUserVerified').is(':checked')
+        };
+
+        if (!userData.email || !userData.password) {
+            alert('請填寫完整資料');
+            return;
+        }
+
+        $.ajax({
+            url: '/api/admin/users',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(userData),
+            success: function (response) {
+                if (response.success) {
+                    alert('用戶新增成功');
+                    $('#addUserModal').modal('hide');
+                    location.reload();
+                } else {
+                    alert('新增失敗: ' + response.message);
+                }
+            },
+            error: function () {
+                alert('新增過程中發生錯誤');
+            }
+        });
+    }
+
+    function editUser(userId) {
+        $.get(`/api/admin/user/${userId}`, function (response) {
+            if (response.success) {
+                const user = response.data;
+                $('#editUserId').val(user.id);
+                $('#editUserEmail').val(user.email);
+                $('#editUserRole').val(user.role);
+                $('#editUserQueryLimit').val(user.query_limit);
+                $('#editUserVerified').prop('checked', user.email_verified);
+
+                $('#editUserModal').modal('show');
+            } else {
+                alert('無法載入用戶資料: ' + response.message);
+            }
+        }).fail(function () {
+            alert('載入用戶資料時發生錯誤');
+        });
+    }
+
+    function saveUserChanges() {
+        const userId = $('#editUserId').val();
+        const userData = {
+            role: $('#editUserRole').val(),
+            query_limit: parseInt($('#editUserQueryLimit').val()) || -1,
+            email_verified: $('#editUserVerified').is(':checked')
+        };
+
+        $.ajax({
+            url: `/api/admin/user/${userId}`,
+            method: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify(userData),
+            success: function (response) {
+                if (response.success) {
+                    alert('用戶資料已更新');
+                    $('#editUserModal').modal('hide');
+                    location.reload();
+                } else {
+                    alert('更新失敗: ' + response.message);
+                }
+            },
+            error: function () {
+                alert('更新過程中發生錯誤');
+            }
+        });
+    }
+
+    function resetUserQueries() {
+        const userId = $('#editUserId').val();
+
+        if (confirm('確定要重設此用戶的查詢次數嗎？')) {
+            $.ajax({
+                url: `/api/admin/user/${userId}/reset-queries`,
+                method: 'POST',
+                success: function (response) {
+                    if (response.success) {
+                        alert('查詢次數已重設');
+                    } else {
+                        alert('重設失敗: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('重設過程中發生錯誤');
+                }
+            });
+        }
+    }
+
+    function deleteUser(userId) {
+        if (confirm('確定要刪除此用戶嗎？此操作無法復原。')) {
+            $.ajax({
+                url: `/api/admin/user/${userId}`,
+                method: 'DELETE',
+                success: function (response) {
+                    if (response.success) {
+                        alert('用戶已刪除');
+                        location.reload();
+                    } else {
+                        alert('刪除失敗: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('刪除過程中發生錯誤');
+                }
+            });
+        }
+    }
+
+    function viewUserLogs(userId) {
+        window.open(`/admin/user/${userId}/logs`, '_blank');
+    }
+
+    function exportUsers() {
+        window.location.href = '/api/admin/export-users';
+    }
+
+    function refreshUserList() {
+        location.reload();
+    }
+
+    function batchUpdateRole() {
+        if (selectedUsers.length === 0) {
+            alert('請先選擇用戶');
+            return;
+        }
+
+        const newRole = prompt('請選擇新的會員等級:\nbasic - 初級會員\npaid - 付費會員\nadmin - 管理員');
+
+        if (newRole && ['basic', 'paid', 'admin'].includes(newRole)) {
+            $.ajax({
+                url: '/api/admin/users/batch-update',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    user_ids: selectedUsers,
+                    role: newRole
+                }),
+                success: function (response) {
+                    if (response.success) {
+                        alert('批次更新成功');
+                        location.reload();
+                    } else {
+                        alert('批次更新失敗: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('批次更新過程中發生錯誤');
+                }
+            });
+        }
+    }
+
+    function batchVerifyEmail() {
+        if (selectedUsers.length === 0) {
+            alert('請先選擇用戶');
+            return;
+        }
+
+        if (confirm(`確定要批次驗證 ${selectedUsers.length} 個用戶的 Email 嗎？`)) {
+            $.ajax({
+                url: '/api/admin/users/batch-verify',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    user_ids: selectedUsers
+                }),
+                success: function (response) {
+                    if (response.success) {
+                        alert('批次驗證成功');
+                        location.reload();
+                    } else {
+                        alert('批次驗證失敗: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('批次驗證過程中發生錯誤');
+                }
+            });
+        }
+    }
+
+    function batchDeleteUsers() {
+        if (selectedUsers.length === 0) {
+            alert('請先選擇用戶');
+            return;
+        }
+
+        if (confirm(`確定要刪除 ${selectedUsers.length} 個用戶嗎？此操作無法復原。`)) {
+            $.ajax({
+                url: '/api/admin/users/batch-delete',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    user_ids: selectedUsers
+                }),
+                success: function (response) {
+                    if (response.success) {
+                        alert('批次刪除成功');
+                        location.reload();
+                    } else {
+                        alert('批次刪除失敗: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('批次刪除過程中發生錯誤');
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

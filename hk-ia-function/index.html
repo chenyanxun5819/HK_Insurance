@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AML 制裁名單查詢系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        #nameInput {
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            width: 300px;
+        }
+
+        #searchBtn {
+            padding: 12px 20px;
+            font-size: 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #searchBtn:hover {
+            background: #5a6fd8;
+        }
+
+        #searchBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 20px;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .results-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 2px solid #5a6fd8;
+        }
+
+        .results-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ddd;
+            vertical-align: top;
+        }
+
+        .results-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .results-table tr:hover {
+            background: #e8f0fe;
+        }
+
+        .results-table a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .results-table a:hover {
+            color: #5a6fd8;
+            text-decoration: underline;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .pagination button:hover {
+            background: #f0f0f0;
+        }
+
+        .pagination button:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+            color: #999;
+        }
+
+        .pagination .current-page {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-info {
+            margin: 0 15px;
+            color: #666;
+        }
+
+        .data-source {
+            text-align: right;
+            font-style: italic;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .statistics {
+            text-align: left;
+            font-style: italic;
+            font-size: 12px;
+            color: #666;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 AML 制裁名單查詢系統</h1>
+        <div class="data-source">資料來源：香港保險業監管局</div>
+
+        <div class="search-box">
+            <input type="text" id="nameInput" placeholder="請輸入姓名..." />
+            <button id="searchBtn" onclick="searchName()">查詢</button>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <!-- 統計資訊區域 -->
+        <div id="statisticsContainer">
+            <div class="statistics">載入統計中...</div>
+        </div>
+    </div>
+
+    <script>
+        let isSearching = false;
+        let allResults = [];
+        let currentPage = 1;
+        const itemsPerPage = 20;
+
+        // 頁面載入時獲取統計資訊
+        document.addEventListener('DOMContentLoaded', function () {
+            loadStatisticsForTable();
+        });
+
+        // 按 Enter 也可以搜尋
+        document.getElementById('nameInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                searchName();
+            }
+        });
+
+        async function searchName() {
+            if (isSearching) return;
+
+            const nameInput = document.getElementById('nameInput');
+            const searchBtn = document.getElementById('searchBtn');
+            const resultsDiv = document.getElementById('results');
+
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                alert('請輸入姓名');
+                return;
+            }
+
+            isSearching = true;
+            searchBtn.disabled = true;
+            searchBtn.textContent = '查詢中...';
+            resultsDiv.innerHTML = '<div class="loading">🔍 查詢中...</div>';
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: name })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    allResults = data.matches;
+                    currentPage = 1;
+                    displayResults(data);
+                } else {
+                    resultsDiv.innerHTML = `<div class="error">查詢失敗: ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">網路錯誤: ${error.message}</div>`;
+            } finally {
+                isSearching = false;
+                searchBtn.disabled = false;
+                searchBtn.textContent = '查詢';
+            }
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+
+            if (!data.found || data.matches.length === 0) {
+                resultsDiv.innerHTML = '<div class="no-results">🔍 未找到相關記錄</div>';
+                return;
+            }
+
+            const totalPages = Math.ceil(allResults.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentResults = allResults.slice(startIndex, endIndex);
+
+            let html = `<div class="stats">找到 ${data.total} 筆相關記錄</div>`;
+
+            html += `
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%">姓名</th>
+                            <th style="width: 15%">國籍</th>
+                            <th style="width: 20%">護照號碼</th>
+                            <th style="width: 10%">年份</th>
+                            <th style="width: 30%">連結</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            currentResults.forEach(match => {
+                const sourceUrl = match.source || '';
+                const linkDisplay = sourceUrl ?
+                    `<a href="${escapeHtml(sourceUrl)}" target="_blank" style="color: #667eea; text-decoration: none;">🔗 查看來源</a>` :
+                    '無連結';
+
+                html += `
+                    <tr>
+                        <td><strong>${escapeHtml(match.name)}</strong></td>
+                        <td>${escapeHtml(match.nationality)}</td>
+                        <td>${escapeHtml(match.passport_no)}</td>
+                        <td>${escapeHtml(match.year)}</td>
+                        <td>${linkDisplay}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            // 添加分頁控制
+            if (totalPages > 1) {
+                html += `
+                    <div class="pagination">
+                        <button onclick="changePage(1)" ${currentPage === 1 ? 'disabled' : ''}>首頁</button>
+                        <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一頁</button>
+                        <span class="page-info">第 ${currentPage} 頁，共 ${totalPages} 頁</span>
+                        <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一頁</button>
+                        <button onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末頁</button>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(allResults.length / itemsPerPage);
+            if (page < 1 || page > totalPages) return;
+
+            currentPage = page;
+            displayResults({
+                success: true,
+                found: true,
+                matches: allResults,
+                total: allResults.length
+            });
+        }
+
+        async function loadStatisticsForTable() {
+            try {
+                const response = await fetch('/statistics');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayStatisticsInTable(data);
+                } else {
+                    document.getElementById('statisticsContainer').innerHTML = '<div class="statistics">統計載入失敗</div>';
+                }
+            } catch (error) {
+                document.getElementById('statisticsContainer').innerHTML = '<div class="statistics">統計載入錯誤</div>';
+            }
+        }
+
+        function displayStatisticsInTable(data) {
+            const statsContainer = document.getElementById('statisticsContainer');
+
+            // 計算年份統計
+            const yearCounts = data.year_stats;
+            // 修正：將年份轉為數字後排序，排除非數字年份
+            const sortedYears = Object.keys(yearCounts)
+                .filter(year => !isNaN(year) && year !== '未知')
+                .sort((a, b) => parseInt(a) - parseInt(b));
+            
+            // 加入非數字年份（如"未知"）
+            const nonNumericYears = Object.keys(yearCounts)
+                .filter(year => isNaN(year) || year === '未知');
+
+            let statsHtml = `
+                <div class="statistics">
+                    總計：${data.total} 筆資料<br>
+            `;
+
+            // 先顯示數字年份
+            sortedYears.forEach(year => {
+                statsHtml += `${year}年：${yearCounts[year]}筆<br>`;
+            });
+            
+            // 再顯示非數字年份
+            nonNumericYears.forEach(year => {
+                statsHtml += `${year}：${yearCounts[year]}筆<br>`;
+            });
+
+            statsHtml += '</div>';
+
+            statsContainer.innerHTML = statsHtml;
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}AML 資料查詢 - 會員專區{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 標題區域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="hero-section text-center" style="border-radius: 15px; padding: 2rem;">
+                <h1 class="display-6 mb-3">
+                    <i class="fas fa-shield-alt me-3 text-danger"></i>AML 資料查詢系統
+                </h1>
+                <p class="lead">
+                    搜尋香港保險業反洗錢資料庫，包含超過 14,000 筆記錄
+                </p>
+                <div class="mt-3">
+                    <span class="badge bg-primary me-2">
+                        <i class="fas fa-user me-1"></i>{{ user.role|upper }} 會員
+                    </span>
+                    <span class="badge bg-info">
+                        <i class="fas fa-search me-1"></i>
+                        {% if user.query_limit == -1 %}
+                        無限制查詢
+                        {% else %}
+                        剩餘 {{ user.query_limit - user.queries_used }} 次查詢
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查詢表單 -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search me-2"></i>查詢條件
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="searchForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="keyword" class="form-label">
+                                    <i class="fas fa-user me-1"></i>姓名關鍵字
+                                </label>
+                                <input type="text" class="form-control" id="keyword" name="keyword"
+                                    placeholder="輸入姓名進行搜尋..." value="{{ request.args.get('keyword', '') }}">
+                                <small class="form-text text-muted">
+                                    支援部分匹配搜尋，不分大小寫
+                                </small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="year" class="form-label">
+                                    <i class="fas fa-calendar me-1"></i>年份篩選
+                                </label>
+                                <select class="form-select" id="year" name="year">
+                                    <option value="">全部年份</option>
+                                    {% for y in available_years %}
+                                    <option value="{{ y }}" {{ 'selected' if request.args.get('year')==y|string }}>
+                                        {{ y }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary me-md-2" onclick="clearForm()">
+                                <i class="fas fa-eraser me-1"></i>清除
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="searchBtn">
+                                <i class="fas fa-search me-1"></i>搜尋
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查詢結果 -->
+    <div id="resultsContainer" style="display: none;">
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    找到 <strong id="resultCount">0</strong> 筆符合條件的記錄
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>查詢結果
+                        </h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="exportResults()">
+                            <i class="fas fa-download me-1"></i>匯出結果
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="resultsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-hashtag me-1"></i>編號</th>
+                                        <th><i class="fas fa-user me-1"></i>姓名</th>
+                                        <th><i class="fas fa-flag me-1"></i>國籍</th>
+                                        <th><i class="fas fa-passport me-1"></i>護照號碼</th>
+                                        <th><i class="fas fa-calendar me-1"></i>年份</th>
+                                        <th><i class="fas fa-file-pdf me-1"></i>來源文件</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsBody">
+                                    <!-- 動態載入結果 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入動畫 -->
+    <div id="loadingSpinner" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">搜尋中...</span>
+        </div>
+        <p class="mt-2">正在搜尋資料，請稍候...</p>
+    </div>
+
+    <!-- 空結果提示 -->
+    <div id="noResults" class="text-center py-5" style="display: none;">
+        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+        <h4 class="text-muted">未找到符合條件的記錄</h4>
+        <p class="text-muted">請嘗試調整搜尋條件或使用不同的關鍵字</p>
+    </div>
+
+    <!-- 查詢限制提示 -->
+    {% if user.query_limit != -1 %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>查詢限制提醒：</strong>
+                您今日還可以進行 <strong>{{ user.query_limit - user.queries_used }}</strong> 次查詢。
+                {% if user.role == 'basic' %}
+                考慮升級為付費會員以享受無限查詢服務。
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let searchData = [];
+
+    $(document).ready(function () {
+        // 表單提交處理
+        $('#searchForm').on('submit', function (e) {
+            e.preventDefault();
+            performSearch();
+        });
+
+        // 如果有初始搜尋參數，自動執行搜尋
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('keyword') || urlParams.get('year')) {
+            performSearch();
+        }
+    });
+
+    function performSearch() {
+        const keyword = $('#keyword').val().trim();
+        const year = $('#year').val();
+
+        // 檢查是否有搜尋條件
+        if (!keyword && !year) {
+            alert('請輸入至少一個搜尋條件');
+            return;
+        }
+
+        // 顯示載入動畫
+        $('#loadingSpinner').show();
+        $('#resultsContainer').hide();
+        $('#noResults').hide();
+
+        // 發送 AJAX 請求
+        $.ajax({
+            url: '/api/search',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                keyword: keyword,
+                year: year
+            }),
+            success: function (response) {
+                $('#loadingSpinner').hide();
+
+                if (response.success) {
+                    displayResults(response.data);
+                    searchData = response.data;
+
+                    // 更新 URL
+                    const newUrl = new URL(window.location);
+                    if (keyword) newUrl.searchParams.set('keyword', keyword);
+                    else newUrl.searchParams.delete('keyword');
+                    if (year) newUrl.searchParams.set('year', year);
+                    else newUrl.searchParams.delete('year');
+                    window.history.pushState({}, '', newUrl);
+                } else {
+                    alert('搜尋失敗: ' + response.message);
+                }
+            },
+            error: function (xhr) {
+                $('#loadingSpinner').hide();
+
+                if (xhr.status === 429) {
+                    alert('今日查詢次數已用完，請明天再試或升級會員');
+                } else if (xhr.status === 401) {
+                    alert('請重新登入');
+                    window.location.href = '/login';
+                } else {
+                    alert('搜尋過程中發生錯誤，請稍後再試');
+                }
+            }
+        });
+    }
+
+    function displayResults(data) {
+        if (data.length === 0) {
+            $('#noResults').show();
+            return;
+        }
+
+        $('#resultCount').text(data.length);
+
+        const tbody = $('#resultsBody');
+        tbody.empty();
+
+        data.forEach(function (item, index) {
+            const row = `
+            <tr>
+                <td>${index + 1}</td>
+                <td><strong>${escapeHtml(item.name)}</strong></td>
+                <td>${escapeHtml(item.nationality || '未提供')}</td>
+                <td>
+                    ${item.passport_no ?
+                    `<code>${escapeHtml(item.passport_no)}</code>` :
+                    '<span class="text-muted">未提供</span>'
+                }
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${item.year}</span>
+                </td>
+                <td>
+                    ${item.source_url ?
+                    `<a href="${item.source_url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-external-link-alt me-1"></i>查看
+                        </a>` :
+                    `<span class="text-muted">${escapeHtml(item.source_pdf || '無連結')}</span>`
+                }
+                </td>
+            </tr>
+        `;
+            tbody.append(row);
+        });
+
+        $('#resultsContainer').show();
+    }
+
+    function clearForm() {
+        $('#keyword').val('');
+        $('#year').val('');
+        $('#resultsContainer').hide();
+        $('#noResults').hide();
+
+        // 清除 URL 參數
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.delete('keyword');
+        newUrl.searchParams.delete('year');
+        window.history.pushState({}, '', newUrl);
+    }
+
+    function exportResults() {
+        if (searchData.length === 0) {
+            alert('沒有可匯出的資料');
+            return;
+        }
+
+        // 準備 CSV 資料
+        const headers = ['編號', '姓名', '國籍', '護照號碼', '年份', '來源文件'];
+        const csvContent = [
+            headers.join(','),
+            ...searchData.map((item, index) => [
+                index + 1,
+                `"${item.name}"`,
+                `"${item.nationality || ''}"`,
+                `"${item.passport_no || ''}"`,
+                item.year,
+                `"${item.source_pdf || ''}"`
+            ].join(','))
+        ].join('\n');
+
+        // 下載檔案
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `AML_搜尋結果_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text ? text.replace(/[&<>"']/g, function (m) { return map[m]; }) : '';
+    }
+</script>
+{% endblock %}

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -167,8 +168,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .password-requirements {
@@ -195,6 +201,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="register-container">
         <div class="logo">
@@ -203,7 +210,7 @@
         </div>
 
         <div id="alert-container"></div>
-        
+
         <div class="loading" id="loading">
             <div class="spinner"></div>
             <p>註冊中...</p>
@@ -366,7 +373,7 @@
                 localStorage.setItem('firebase_token', idToken);
 
                 showAlert('註冊成功！正在跳轉到登入頁面...', 'success');
-                
+
                 // 跳轉到登入頁面
                 setTimeout(() => {
                     window.location.href = '/login';
@@ -374,9 +381,9 @@
 
             } catch (error) {
                 console.error('註冊錯誤:', error);
-                
+
                 let errorMessage = '註冊失敗，請稍後再試';
-                
+
                 switch (error.code) {
                     case 'auth/email-already-in-use':
                         errorMessage = '此電子郵件已被註冊，請使用其他郵件地址或直接登入';
@@ -391,7 +398,7 @@
                         errorMessage = '電子郵件註冊未啟用，請聯繫管理員';
                         break;
                 }
-                
+
                 showAlert(errorMessage);
             } finally {
                 showLoading(false);
@@ -399,4 +406,5 @@
         });
     </script>
 </body>
+
 </html>

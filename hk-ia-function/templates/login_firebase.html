@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -167,11 +168,17 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="login-container">
         <div class="logo">
@@ -180,7 +187,7 @@
         </div>
 
         <div id="alert-container"></div>
-        
+
         <div class="loading" id="loading">
             <div class="spinner"></div>
             <p>登入中...</p>
@@ -282,7 +289,7 @@
                 localStorage.setItem('firebase_token', idToken);
 
                 showAlert('登入成功！正在跳轉...', 'success');
-                
+
                 // 跳轉到首頁
                 setTimeout(() => {
                     window.location.href = '/';
@@ -290,9 +297,9 @@
 
             } catch (error) {
                 console.error('登入錯誤:', error);
-                
+
                 let errorMessage = '登入失敗，請檢查您的帳號密碼';
-                
+
                 switch (error.code) {
                     case 'auth/user-not-found':
                         errorMessage = '找不到此用戶，請檢查電子郵件地址';
@@ -310,7 +317,7 @@
                         errorMessage = '登入嘗試次數過多，請稍後再試';
                         break;
                 }
-                
+
                 showAlert(errorMessage);
             } finally {
                 showLoading(false);
@@ -326,4 +333,5 @@
         });
     </script>
 </body>
+
 </html>

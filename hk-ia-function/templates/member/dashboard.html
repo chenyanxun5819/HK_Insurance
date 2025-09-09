@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}會員中心 - AML 查詢系統{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 歡迎區域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="hero-section" style="border-radius: 15px; padding: 2rem;">
+                <h1 class="display-6 mb-3">
+                    <i class="fas fa-user-circle me-3"></i>歡迎回來，{{ user.email }}！
+                </h1>
+                <p class="lead mb-0">
+                    您的會員等級：
+                    {% if user.role == 'admin' %}
+                    <span class="badge bg-warning text-dark fs-6"><i class="fas fa-crown me-1"></i>管理員</span>
+                    {% elif user.role == 'paid' %}
+                    <span class="badge bg-primary fs-6"><i class="fas fa-star me-1"></i>付費會員</span>
+                    {% else %}
+                    <span class="badge bg-success fs-6"><i class="fas fa-user me-1"></i>初級會員</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 統計資訊 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-search display-4 mb-2"></i>
+                <h5>查詢限制</h5>
+                <h2>{{ '∞' if user.query_limit == -1 else user.query_limit }}</h2>
+                <small>次/日</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-chart-line display-4 mb-2"></i>
+                <h5>已使用</h5>
+                <h2>{{ user.queries_used }}</h2>
+                <small>次查詢</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-clock display-4 mb-2"></i>
+                <h5>剩餘次數</h5>
+                <h2>
+                    {% if user.query_limit == -1 %}
+                    ∞
+                    {% else %}
+                    {{ user.query_limit - user.queries_used }}
+                    {% endif %}
+                </h2>
+                <small>可查詢</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-calendar display-4 mb-2"></i>
+                <h5>加入時間</h5>
+                <h2>{{ user.created_at[:10] }}</h2>
+                <small>註冊日期</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 快速操作 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>快速操作
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-search me-2"></i>
+                                開始查詢 AML 資料
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary btn-lg w-100">
+                                <i class="fas fa-key me-2"></i>
+                                修改密碼
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if user.query_limit != -1 and user.queries_used >= user.query_limit %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>查詢次數已用完</strong> - 基本會員總共5次查詢機會已用完，請考慮升級為付費會員
+                    </div>
+                    {% elif user.query_limit != -1 and (user.query_limit - user.queries_used) <= 2 %} <div
+                        class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>查詢次數即將用完</strong> - 剩餘 {{ user.query_limit - user.queries_used }} 次（總共5次）
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 帳戶資訊 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-cog me-2"></i>帳戶資訊
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Email：</dt>
+                    <dd class="col-sm-7">{{ user.email }}</dd>
+
+                    <dt class="col-sm-5">狀態：</dt>
+                    <dd class="col-sm-7">
+                        {% if user.email_verified %}
+                        <span class="badge bg-success">已驗證</span>
+                        {% else %}
+                        <span class="badge bg-warning">未驗證</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-5">最後登入：</dt>
+                    <dd class="col-sm-7">
+                        {% if user.last_login_at %}
+                        {{ user.last_login_at[:19].replace('T', ' ') }}
+                        {% else %}
+                        首次登入
+                        {% endif %}
+                    </dd>
+                </dl>
+
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('change_password') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-key me-1"></i>修改密碼
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">
+                        <i class="fas fa-sign-out-alt me-1"></i>登出
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近查詢記錄 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>最近查詢記錄
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if query_logs %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-search me-1"></i>查詢關鍵字</th>
+                                <th><i class="fas fa-list-ol me-1"></i>結果數量</th>
+                                <th><i class="fas fa-clock me-1"></i>查詢時間</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in query_logs %}
+                            <tr>
+                                <td>
+                                    <code>{{ log.keyword }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary">{{ log.result_count }} 筆</span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {{ log.created_at[:19].replace('T', ' ') }}
+                                    </small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-search fa-3x mb-3"></i>
+                    <h5>尚無查詢記錄</h5>
+                    <p>開始您的第一次 AML 查詢吧！</p>
+                    <a href="{{ url_for('search_page') }}" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>立即查詢
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // 自動刷新剩餘查詢次數（每分鐘檢查一次）
+        setInterval(function () {
+            location.reload();
+        }, 60000);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,36 @@
+nohup: 忽略輸入
+/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/google/cloud/firestore_v1/base_collection.py:295: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+🚀 初始化 Firebase Authentication...
+🚀 初始化 Firestore AML 查詢引擎 (GCP生產模式)...
+🚀 初始化 Firestore 會員管理系統 (GCP生產模式)...
+🔄 初始化 Firestore 用戶管理器 (生產模式)，專案: hk-insurance-crawler
+✅ Firestore 用戶管理器初始化完成
+🔍 檢查管理員帳戶: astcws@gmail.com
+ℹ️ 註冊結果: 此 Email 已被註冊
+✅ 管理員帳戶已存在且可正常登入
+🚀 啟動 Firebase Auth AML 查詢系統於 http://127.0.0.1:8000
+ * Serving Flask app 'main_firebase'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://192.168.1.11:8000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+/home/weschen/HK_insurance/hk-ia-function/venv/lib/python3.12/site-packages/google/cloud/firestore_v1/base_collection.py:295: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 143-357-423
+INFO:werkzeug:127.0.0.1 - - [05/Sep/2025 23:03:40] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/Sep/2025 23:03:57] "[32mPOST /login HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [05/Sep/2025 23:03:57] "[31m[1mPOST / HTTP/1.1[0m" 405 -
+🚀 初始化 Firebase Authentication...
+🚀 初始化 Firestore AML 查詢引擎 (GCP生產模式)...
+🚀 初始化 Firestore 會員管理系統 (GCP生產模式)...
+🔄 初始化 Firestore 用戶管理器 (生產模式)，專案: hk-insurance-crawler
+✅ Firestore 用戶管理器初始化完成
+🔍 檢查管理員帳戶: astcws@gmail.com
+ℹ️ 註冊結果: 此 Email 已被註冊
+✅ 管理員帳戶已存在且可正常登入
+🚀 啟動 Firebase Auth AML 查詢系統於 http://127.0.0.1:8000

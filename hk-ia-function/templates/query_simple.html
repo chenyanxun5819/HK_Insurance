@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AML 查詢系統</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        .search-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 3rem 0;
+            color: white;
+        }
+
+        .result-card {
+            border-left: 4px solid #007bff;
+            transition: transform 0.2s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .user-info {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .admin-badge {
+            background: linear-gradient(45deg, #dc3545, #fd7e14);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 用戶資訊欄 -->
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="user-info" id="userInfo">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">
+                                <i class="fas fa-user me-2"></i>
+                                <span id="userEmail">載入中...</span>
+                                <span id="userRole" class="badge admin-badge ms-2">載入中</span>
+                            </h6>
+                            <small>
+                                查詢次數: <span id="queryUsage">載入中</span>
+                            </small>
+                        </div>
+                        <a href="/logout" class="btn btn-light btn-sm">
+                            <i class="fas fa-sign-out-alt me-1"></i>登出
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜尋區域 -->
+    <div class="search-container">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="text-center mb-4">
+                        <h1><i class="fas fa-search me-2"></i>AML 反洗錢查詢系統</h1>
+                        <p class="lead">搜尋香港保險業反洗錢資料庫</p>
+                    </div>
+
+                    <div class="input-group input-group-lg">
+                        <input type="text" class="form-control" id="searchInput" placeholder="輸入姓名進行搜尋..."
+                            onkeypress="handleKeyPress(event)">
+                        <button class="btn btn-warning" onclick="performSearch()">
+                            <i class="fas fa-search me-2"></i>搜尋
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 統計資訊 -->
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-info" id="statsInfo">
+                    <i class="fas fa-info-circle me-2"></i>載入統計資訊中...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜尋結果 -->
+    <div class="container" id="resultsContainer" style="display: none;">
+        <div class="row">
+            <div class="col-12">
+                <h3><i class="fas fa-list me-2"></i>搜尋結果</h3>
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入中提示 -->
+    <div class="text-center my-4" id="loadingSpinner" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">載入中...</span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // 頁面載入時獲取統計資訊
+        document.addEventListener('DOMContentLoaded', function () {
+            loadStats();
+        });
+
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('statsInfo').innerHTML =
+                            `<i class="fas fa-exclamation-triangle me-2"></i>${data.error}`;
+                        document.getElementById('statsInfo').className = 'alert alert-danger';
+                    } else {
+                        document.getElementById('statsInfo').innerHTML =
+                            `<i class="fas fa-database me-2"></i>${data.message} | 年份分布: ${data.yearStats.map(y => y.year + '(' + y.count + ')').join(', ')}`;
+
+                        // 更新用戶資訊
+                        if (data.userInfo) {
+                            updateUserInfo(data.userInfo);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('載入統計失敗:', error);
+                    document.getElementById('statsInfo').innerHTML =
+                        `<i class="fas fa-exclamation-triangle me-2"></i>載入統計資訊失敗`;
+                    document.getElementById('statsInfo').className = 'alert alert-danger';
+                });
+        }
+
+        function updateUserInfo(userInfo) {
+            document.getElementById('userEmail').textContent = userInfo.email;
+
+            const roleElement = document.getElementById('userRole');
+            const usageElement = document.getElementById('queryUsage');
+
+            // 設定角色標籤
+            if (userInfo.role === 'admin') {
+                roleElement.textContent = '管理員';
+                roleElement.className = 'badge admin-badge';
+            }
+
+            // 設定查詢次數
+            if (userInfo.queryLimit === -1) {
+                usageElement.textContent = `${userInfo.queriesUsed} (無限制)`;
+            } else {
+                usageElement.textContent = `${userInfo.queriesUsed}/${userInfo.queryLimit}`;
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+
+        function performSearch() {
+            const keyword = document.getElementById('searchInput').value.trim();
+            if (!keyword) {
+                alert('請輸入搜尋關鍵字');
+                return;
+            }
+
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('resultsContainer').style.display = 'none';
+
+            fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ keyword: keyword })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingSpinner').style.display = 'none';
+
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+
+                    // 更新用戶資訊
+                    if (data.userInfo) {
+                        updateUserInfo(data.userInfo);
+                    }
+
+                    displayResults(data.results, data.keyword);
+                })
+                .catch(error => {
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    console.error('搜尋失敗:', error);
+                    alert('搜尋失敗，請稍後再試');
+                });
+        }
+
+        function displayResults(results, keyword) {
+            const container = document.getElementById('resultsContent');
+
+            if (!results || results.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-search me-2"></i>
+                        沒有找到與 "${keyword}" 相關的資料
+                    </div>
+                `;
+            } else {
+                let html = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        找到 ${results.length} 筆與 "${keyword}" 相關的資料
+                    </div>
+                `;
+
+                results.forEach((item, index) => {
+                    html += `
+                        <div class="card result-card mb-3">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="card-title">
+                                            <i class="fas fa-user me-2"></i>
+                                            ${item.name_en || '未提供'}
+                                        </h5>
+                                        ${item.name_zh ? `<p class="text-muted mb-1">中文姓名: ${item.name_zh}</p>` : ''}
+                                        ${item.name_other ? `<p class="text-muted mb-1">其他姓名: ${item.name_other}</p>` : ''}
+                                        ${item.type ? `<p class="mb-1"><strong>類型:</strong> ${item.type}</p>` : ''}
+                                        ${item.date ? `<p class="mb-1"><strong>日期:</strong> ${item.date}</p>` : ''}
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <span class="badge bg-primary">#${index + 1}</span>
+                                        ${item.url ? `<br><a href="${item.url}" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
+                                            <i class="fas fa-external-link-alt me-1"></i>查看原文件
+                                        </a>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            }
+
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>

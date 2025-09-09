@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}管理員後台 - AML 查詢系統{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- 歡迎區域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="hero-section" style="border-radius: 15px; padding: 2rem;">
+                <h1 class="display-6 mb-3">
+                    <i class="fas fa-crown me-3 text-warning"></i>管理員控制台
+                </h1>
+                <p class="lead mb-0">
+                    系統管理與用戶控制中心
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 統計資訊 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-users display-4 mb-2 text-primary"></i>
+                <h5>總用戶數</h5>
+                <h2>{{ stats.total_users }}</h2>
+                <small>註冊用戶</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-search display-4 mb-2 text-success"></i>
+                <h5>今日查詢</h5>
+                <h2>{{ stats.today_queries }}</h2>
+                <small>次查詢</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-database display-4 mb-2 text-info"></i>
+                <h5>資料總數</h5>
+                <h2>{{ stats.total_records }}</h2>
+                <small>AML 記錄</small>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="stats-card text-center">
+                <i class="fas fa-star display-4 mb-2 text-warning"></i>
+                <h5>付費用戶</h5>
+                <h2>{{ stats.paid_users }}</h2>
+                <small>升級會員</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 快速操作 -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>快速操作
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-primary">
+                            <i class="fas fa-users me-2"></i>用戶管理
+                        </a>
+                        <a href="{{ url_for('search_page') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-search me-2"></i>AML 查詢
+                        </a>
+                        <button class="btn btn-outline-success" onclick="exportUserData()">
+                            <i class="fas fa-download me-2"></i>匯出用戶資料
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="refreshStats()">
+                            <i class="fas fa-sync me-2"></i>重新整理統計
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最新用戶 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-plus me-2"></i>最新註冊用戶
+                    </h5>
+                    <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline-primary">
+                        查看全部
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>等級</th>
+                                    <th>狀態</th>
+                                    <th>註冊時間</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in recent_users %}
+                                <tr>
+                                    <td>{{ user.email }}</td>
+                                    <td>
+                                        {% if user.role == 'admin' %}
+                                        <span class="badge bg-warning text-dark">管理員</span>
+                                        {% elif user.role == 'paid' %}
+                                        <span class="badge bg-primary">付費會員</span>
+                                        {% else %}
+                                        <span class="badge bg-success">初級會員</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if user.email_verified %}
+                                        <span class="badge bg-success">已驗證</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">未驗證</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ user.created_at[:10] }}</small>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                            onclick="editUser({{ user.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">
+                        <i class="fas fa-users fa-2x mb-2"></i>
+                        <p>暫無新用戶註冊</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查詢活動圖表 -->
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>查詢活動統計 (最近 7 天)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="queryChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系統資訊 -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-server me-2"></i>系統資訊
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-6">資料庫大小：</dt>
+                        <dd class="col-sm-6">{{ stats.db_size or '計算中...' }}</dd>
+
+                        <dt class="col-sm-6">最後更新：</dt>
+                        <dd class="col-sm-6">
+                            <small>{{ stats.last_update or '未知' }}</small>
+                        </dd>
+
+                        <dt class="col-sm-6">活躍用戶：</dt>
+                        <dd class="col-sm-6">{{ stats.active_users or 0 }}</dd>
+
+                        <dt class="col-sm-6">系統狀態：</dt>
+                        <dd class="col-sm-6">
+                            <span class="badge bg-success">運行正常</span>
+                        </dd>
+                    </dl>
+
+                    <div class="d-grid gap-2 mt-3">
+                        <button class="btn btn-outline-info btn-sm" onclick="checkSystemHealth()">
+                            <i class="fas fa-heartbeat me-1"></i>系統檢查
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 編輯用戶 Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">編輯用戶</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editUserEmail" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">會員等級</label>
+                        <select class="form-select" id="editUserRole">
+                            <option value="basic">初級會員</option>
+                            <option value="paid">付費會員</option>
+                            <option value="admin">管理員</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">查詢限制 (每日)</label>
+                        <input type="number" class="form-control" id="editUserQueryLimit" placeholder="-1 表示無限制">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="editUserVerified">
+                            <label class="form-check-label">Email 已驗證</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveUserChanges()">儲存變更</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let queryChart;
+
+    $(document).ready(function () {
+        // 初始化圖表
+        initQueryChart();
+    });
+
+    function initQueryChart() {
+        const ctx = document.getElementById('queryChart').getContext('2d');
+
+        // 模擬數據 - 實際應用中從後端獲取
+        const chartData = {
+            labels: ['6天前', '5天前', '4天前', '3天前', '2天前', '昨天', '今天'],
+            datasets: [{
+                label: '查詢次數',
+                data: [45, 52, 38, 65, 72, 58, 63],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        };
+
+        queryChart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    function editUser(userId) {
+        // 獲取用戶資料
+        $.get(`/api/admin/user/${userId}`, function (response) {
+            if (response.success) {
+                const user = response.data;
+                $('#editUserId').val(user.id);
+                $('#editUserEmail').val(user.email);
+                $('#editUserRole').val(user.role);
+                $('#editUserQueryLimit').val(user.query_limit);
+                $('#editUserVerified').prop('checked', user.email_verified);
+
+                $('#editUserModal').modal('show');
+            } else {
+                alert('無法載入用戶資料: ' + response.message);
+            }
+        }).fail(function () {
+            alert('載入用戶資料時發生錯誤');
+        });
+    }
+
+    function saveUserChanges() {
+        const userId = $('#editUserId').val();
+        const userData = {
+            role: $('#editUserRole').val(),
+            query_limit: parseInt($('#editUserQueryLimit').val()) || -1,
+            email_verified: $('#editUserVerified').is(':checked')
+        };
+
+        $.ajax({
+            url: `/api/admin/user/${userId}`,
+            method: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify(userData),
+            success: function (response) {
+                if (response.success) {
+                    alert('用戶資料已更新');
+                    $('#editUserModal').modal('hide');
+                    location.reload();
+                } else {
+                    alert('更新失敗: ' + response.message);
+                }
+            },
+            error: function () {
+                alert('更新過程中發生錯誤');
+            }
+        });
+    }
+
+    function exportUserData() {
+        if (confirm('確定要匯出所有用戶資料嗎？')) {
+            window.location.href = '/api/admin/export-users';
+        }
+    }
+
+    function refreshStats() {
+        location.reload();
+    }
+
+    function checkSystemHealth() {
+        $.get('/api/admin/health', function (response) {
+            if (response.success) {
+                alert('系統狀態良好\n\n' +
+                    '資料庫連接：正常\n' +
+                    '查詢響應時間：' + response.data.response_time + 'ms\n' +
+                    '記憶體使用：' + response.data.memory_usage);
+            } else {
+                alert('系統檢查失敗: ' + response.message);
+            }
+        }).fail(function () {
+            alert('無法進行系統檢查');
+        });
+    }
+</script>
+{% endblock %}
